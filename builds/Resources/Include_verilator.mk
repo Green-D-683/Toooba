@@ -15,10 +15,23 @@ build_dir:
 Verilog_RTL:
 	mkdir -p $@
 
+%.bo:
+	echo $@
+	bsc -verilog -elab $(RTL_GEN_DIRS) $(BSC_COMPILATION_FLAGS) -p $(BSC_PATH) $<
+
+.depends.mk: build_dir Verilog_RTL
+	if ! bluetcl -exec makedepend -verilog -elab  $(RTL_GEN_DIRS)  $(BSC_COMPILATION_FLAGS) -p $(BSC_PATH) -o $@ $(TOPFILE); then rm -f $@ && false; fi
+
+ifeq (,$(filter clean full_clean,$(MAKECMDGOALS)))
+include .depends.mk
+endif
+
 .PHONY: compile
-compile:  build_dir  Verilog_RTL $(REPO)/src_Core/BSV_Additional_Libs/BlueStuff/.git
+compile: Verilog_RTL/mkTop_HW_Side.v
+#Verilog_RTL/mkTop_HW_Side.v:  build_dir Verilog_RTL /tmp/src_dir $(VERILOG_SUB_MODULES)
+Verilog_RTL/mkTop_HW_Side.v: $(TOPFILE) build_dir/Top_HW_Side.bo build_dir Verilog_RTL
 	@echo  "INFO: Verilog RTL generation ..."
-	bsc -u -elab -verilog  $(RTL_GEN_DIRS)  $(BSC_COMPILATION_FLAGS)  -p $(BSC_PATH)  $(TOPFILE)
+	bsc -u -verilog  $(RTL_GEN_DIRS)  $(BSC_COMPILATION_FLAGS) -p $(BSC_PATH) $<
 	@echo  "INFO: Verilog RTL generation finished"
 
 # ================================================================
@@ -52,7 +65,7 @@ NIX_BLUESPEC_INCLUDE = ""
 endif
 
 .PHONY: simulator
-simulator:
+simulator: Verilog_RTL/mkTop_HW_Side.v
 	@echo "INFO: Verilating Verilog files (in newly created obj_dir)"
 	sed  -f $(VERILATOR_RESOURCES)/sed_script.txt  Verilog_RTL/$(TOPMODULE).v > tmp1.v
 	cat  $(VERILATOR_RESOURCES)/verilator_config.vlt \

@@ -107,7 +107,7 @@ isa_tests:
 
 TIMESTAMP := $(shell date +%Y-%m-%d_%H-%M-%S)
 
-.PHONY: benchmarks 
+.PHONY: benchmarks
 benchmarks:
 	@echo "Running benchmarks; saving logs in Logs/"
 	$(REPO)/Tests/Run_benchmarks.py  ./exe_HW_sim  $(REPO)  ./Logs
@@ -117,10 +117,10 @@ benchmarks:
 
 .PHONY: clean
 clean:
-	rm -r -f  *~  Makefile_*  symbol_table.txt  build_dir  obj_dir
+	rm -r -f  *~  Makefile_*  symbol_table.txt  build_dir/*  obj_dir Verilog_RTL/*
 
 .PHONY: full_clean
 full_clean: clean
-	rm -r -f  $(SIM_EXE_FILE)*  *.log  *.vcd  *.hex  Logs/ 
+	rm -r -f  $(SIM_EXE_FILE)*  *.log  *.vcd  *.hex  Logs/
 
 # ================================================================
