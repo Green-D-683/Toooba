@@ -1,6 +1,7 @@
 *~
 README.html
 build_dir
+builds/**/Verilog_RTL
 *.bo
 *.ba
 *.o
