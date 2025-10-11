@@ -31,6 +31,7 @@
           libelf
           verilator
         ];
+        BLUESPEC_VERILOG_LIB="${pkgs.bluespec}/lib/Verilog";
       };
     });
 }

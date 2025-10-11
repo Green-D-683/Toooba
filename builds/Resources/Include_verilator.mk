@@ -44,6 +44,13 @@ VERILATOR_FLAGS = --stats --x-assign fast --x-initial fast --noassert
 VTOP                = V$(TOPMODULE)_edited
 VERILATOR_RESOURCES = $(REPO)/builds/Resources/Verilator_resources
 
+
+ifdef BLUESPEC_VERILOG_LIB
+NIX_BLUESPEC_INCLUDE = "-I${BLUESPEC_VERILOG_LIB}"
+else
+NIX_BLUESPEC_INCLUDE = ""
+endif
+
 .PHONY: simulator
 simulator:
 	@echo "INFO: Verilating Verilog files (in newly created obj_dir)"
@@ -58,9 +65,11 @@ simulator:
 		-I$(RISCY_HOME)/fpgautils/xilinx/reset_regs \
 		-I$(RISCY_HOME)/procs/asic/bluespec_verilog \
 		-I$(REPO)/src_bsc_lib_RTL \
+		$(NIX_BLUESPEC_INCLUDE) \
 		$(VERILATOR_FLAGS) \
 		--cc  $(TOPMODULE)_edited.v \
 		--exe  sim_main.cpp \
+		--timing \
 		$(REPO)/src_Testbench/Top/C_Imported_Functions.c
 	@echo "INFO: Linking verilated files"
 	cp  -p  $(VERILATOR_RESOURCES)/sim_main.cpp  obj_dir/sim_main.cpp
