@@ -24,6 +24,7 @@ help:
 	@echo ''
 	@echo '    make  test         Runs simulation executable on rv32ui-p-add or rv64ui-p-add'
 	@echo '    make  isa_tests    Runs simulation executable on all relevant standard RISC-V ISA tests'
+	@echo '    make  benchmarks   Runs simulation executable on a set of benchmarks'
 	@echo ''
 	@echo '    make  clean        Remove intermediate build-files unnecessary for execution'
 	@echo '    make  full_clean   Restore to pristine state (pre-building anything)'
@@ -57,6 +58,13 @@ $(REPO)/src_Core/BSV_Additional_Libs/BlueStuff/.git:
 # bsc compilation flags
 
 BSC_COMPILATION_FLAGS += \
+	-D BSIM \
+	-D MULT_SYNTH    \
+	-D Near_Mem_Caches    \
+	-D FABRIC64    \
+	-D BLUESIM \
+	-D RVFI \
+	-D PERFORMANCE_MONITORING \
 	-keep-fires -aggressive-conditions -no-warn-action-shadowing -check-assert \
 	-suppress-warnings G0020 -steps-max-intervals 10000000   \
 	-steps-warn-interval 1000000 \
@@ -95,6 +103,15 @@ isa_tests:
 	$(REPO)/Tests/Run_regression.py  ./exe_HW_sim  $(REPO)  ./Logs  $(ARCH)
 	@echo "Finished running regressions; saved logs in Logs/"
 
+# ================================================================
+# Benchmarks
+
+.PHONY: benchmarks
+benchmarks:
+	@echo "Running benchmarks; saving logs in Logs/"
+	$(REPO)/Tests/Run_benchmarks.py  ./exe_HW_sim  $(REPO)  ./Logs
+	@echo "Finished running benchmarks"
+	$(REPO)/Tests/benchmarks/report_log.sh Logs/*.bin.log
 # ================================================================
 
 .PHONY: clean
