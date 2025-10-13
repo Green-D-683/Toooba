@@ -3,4 +3,4 @@
 	url = https://github.com/CTSRD-CHERI/BlueStuff.git
 [submodule "Tests/benchmarks"]
 	path = Tests/benchmarks
-	url = https://github.com/CTSRD-CHERI/toooba-sim-benchmarks.git
+	url = git@github.com:Green-D-683/toooba-sim-benchmarks.git
