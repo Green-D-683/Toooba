@@ -19,3 +19,4 @@ vpi_wrapper_*
 
 .direnv
 *.tap
+*.csv

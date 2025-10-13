@@ -106,12 +106,14 @@ isa_tests:
 # ================================================================
 # Benchmarks
 
-.PHONY: benchmarks
+TIMESTAMP := $(shell date +%Y-%m-%d_%H-%M-%S)
+
+.PHONY: benchmarks 
 benchmarks:
 	@echo "Running benchmarks; saving logs in Logs/"
 	$(REPO)/Tests/Run_benchmarks.py  ./exe_HW_sim  $(REPO)  ./Logs
 	@echo "Finished running benchmarks"
-	$(REPO)/Tests/benchmarks/report_log.sh Logs/*.bin.log
+	$(REPO)/Tests/benchmarks/report_log.sh benchmark_results_$(TIMESTAMP).csv Logs/*.bin.log
 # ================================================================
 
 .PHONY: clean
@@ -120,6 +122,6 @@ clean:
 
 .PHONY: full_clean
 full_clean: clean
-	rm -r -f  $(SIM_EXE_FILE)*  *.log  *.vcd  *.hex  Logs/
+	rm -r -f  $(SIM_EXE_FILE)*  *.log  *.vcd  *.hex  Logs/ 
 
 # ================================================================
