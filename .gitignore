@@ -22,3 +22,10 @@ vpi_wrapper_*
 *.csv
 
 .depends.mk
+BlueSpec-Verilog
+
+Quartus/db
+Quartus/incremental_db
+Quartus/output_files
+
+*.qws
