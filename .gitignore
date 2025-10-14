@@ -20,3 +20,8 @@ vpi_wrapper_*
 .direnv
 *.tap
 *.csv
+BlueSpec-Verilog
+
+Quartus/db
+Quartus/incremental_db
+Quartus/output_files
