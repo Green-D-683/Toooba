@@ -79,3 +79,9 @@ simulator:
 	@echo "INFO: Created verilator executable:    $(SIM_EXE_FILE)"
 
 # ================================================================
+
+# Calculate area measurement with Quartus
+
+quartus: compile
+	quartus_map $(REPO)/Quartus/Toooba.qpf -c $(REPO)/Quartus/mkCoreW.qsf > quartus_artifacts/quartus_output
+	cat quartus_artifacts/quartus_output | grep -E "Implemented ([0-9]+) device resources" -A 5 > quartus_artifacts/quartus_size
