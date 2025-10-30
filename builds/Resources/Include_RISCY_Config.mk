@@ -57,11 +57,11 @@ else ifneq (,$(filter $(CORE_SIZE),SMALL_WIDE LARGE))
 USER_CLK_PERIOD ?= 32
 else ifneq (,$(filter $(CORE_SIZE),LARGE_WIDE))
 USER_CLK_PERIOD ?= 40
-else
+else ifeq (,$(filter $(CORE_SIZE),MANUAL))
 $(error unsupported CORE_SIZE)
 endif
 
-ifeq (,$(filter $(CACHE_SIZE),SMALL LARGE MC_1MB MC_2MB))
+ifeq (,$(filter $(CACHE_SIZE),SMALL LARGE MC_1MB MC_2MB MANUAL))
 $(error unsupported CACHE_SIZE)
 endif
 
@@ -87,11 +87,45 @@ endif
 XILINX_FP_FMA_LATENCY = 3
 XILINX_INT_MUL_LATENCY = 2
 
+# If not using manual tuning
+ifeq (,$(filter $(CORE_SIZE),MANUAL)) 
+BSC_COMPILATION_FLAGS += \
+	-D CORE_$(CORE_SIZE)
+else
+include $(REPO)/builds/Resources/Include_RISCY_Parameters.mk
+# Add parameters needed in ProcConfig.bsv otherwise declared by CORE_SIZE and CACHE_SIZE here
+core_parameters = \
+	USER_CLK_PERIOD \
+	sizeSup \
+	ROB_SIZE \
+	NUM_EPOCHS \
+	NUM_SPEC_TAGS \
+	TLB_SIZE \
+	LDQ_SIZE \
+	STQ_SIZE \
+	SB_SIZE \
+	RS_ALU_SIZE \
+	RS_MEM_SIZE \
+	RS_FPUMULDIV_SIZE
+BSC_COMPILATION_FLAGS += $(foreach parameter,$(core_parameters),-D $(parameter)=$($(parameter)))
+endif
+
+ifeq (,$(filter $(CACHE_SIZE),MANUAL))
+BSC_COMPILATION_FLAGS += \
+	-D CACHE_$(CACHE_SIZE)
+else
+include $(REPO)/builds/Resources/Include_RISCY_Parameters.mk
+# Add parameters needed in ProcConfig.bsv otherwise declared by CORE_SIZE and CACHE_SIZE here
+cache_parameters = \
+	LOG_L1_LINES \
+	LOG_L1_WAYS \
+	LOG_LLC_LINES \
+	LOG_LLC_WAYS
+BSC_COMPILATION_FLAGS += $(foreach parameter,$(cache_parameters),-D $(parameter)=$($(parameter)))
+endif
 
 BSC_COMPILATION_FLAGS += \
-	-D CORE_$(CORE_SIZE) \
 	-D NUM_CORES=$(CORE_NUM) \
-	-D CACHE_$(CACHE_SIZE) \
         -D XILINX_FP_FMA_LATENCY=$(XILINX_FP_FMA_LATENCY) \
         -D XILINX_INT_MUL_LATENCY=$(XILINX_INT_MUL_LATENCY) \
 	-D USE_BSV_BRAM_SYNC_FIFO \
