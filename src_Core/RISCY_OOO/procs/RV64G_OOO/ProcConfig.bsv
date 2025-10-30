@@ -59,7 +59,9 @@
 `define RS_LAZY_ENQ True
 `define ROB_LAZY_ENQ True
 
+`ifndef L1_TLB_SIZE
 `define L1_TLB_SIZE 32 // L1 fully assoc TLB size
+`endif
 
 `define L2_TLB_HUGE_SIZE 8 // L2 2MB/1GB TLB size
 `define LOG_L2_TLB_4KB_SIZE 10 // L2 4KB TLB log size (1024 entries)
@@ -155,8 +157,8 @@
     `define NUM_SPEC_TAGS 8
 
     // Smaller L1 TLB
-    `undef TLB_SIZE
-    `define TLB_SIZE 16
+    `undef L1_TLB_SIZE
+    `define L1_TLB_SIZE 16
 
     // LSQ
     `define LDQ_SIZE 18
