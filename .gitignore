@@ -30,3 +30,6 @@ Quartus/output_files
 
 *.qws
 quartus_artifacts
+
+optimiser.db
+email.json
