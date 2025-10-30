@@ -43,6 +43,12 @@ BLUESTUFF_DIRS = $(REPO)/src_Core/BSV_Additional_Libs/BlueStuff:$(REPO)/src_Core
 
 BSC_PATH = $(ALL_RISCY_DIRS):$(CORE_DIRS):$(TESTBENCH_DIRS):$(BLUESTUFF_DIRS):+
 
+BSC_DEPS = $(filter %.bsv,$(wildcard $(foreach dir,$(strip $(subst +,,$(subst :, ,$(BSC_PATH)))),$(dir)/* )))
+
+compile: $(BSC_DEPS)
+
+simulator: compile
+
 # ----------------
 # Top-level file and module
 
@@ -97,7 +103,7 @@ test:
 # ISA Regression testing
 
 .PHONY: isa_tests
-isa_tests:
+isa_tests: simulator
 	@echo "Running regressions on ISA tests; saving logs in Logs/"
 	$(REPO)/Tests/Run_regression.py  ./exe_HW_sim  $(REPO)  ./Logs  $(ARCH)
 	@echo "Finished running regressions; saved logs in Logs/"
@@ -108,7 +114,7 @@ isa_tests:
 TIMESTAMP := $(shell date +%Y-%m-%d_%H-%M-%S)
 
 .PHONY: benchmarks
-benchmarks:
+benchmarks: simulator
 	@echo "Running benchmarks; saving logs in Logs/"
 	$(REPO)/Tests/Run_benchmarks.py  ./exe_HW_sim  $(REPO)  ./Logs
 	@echo "Finished running benchmarks"
