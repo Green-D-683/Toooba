@@ -13,7 +13,7 @@ build_dir:
 	mkdir -p $@
 
 .depends.mk: build_dir
-	if ! bluetcl -exec makedepend -elab -sim  $(TMP_DIRS)  $(RTL_GEN_DIRS)  $(BSC_COMPILATION_FLAGS)  $(BSC_PATH) -o $@ $(TOPFILE); then rm -f $@ && false; fi
+	if ! bluetcl -exec makedepend -elab -sim  $(TMP_DIRS)  $(RTL_GEN_DIRS)  $(BSC_COMPILATION_FLAGS) -p $(BSC_PATH) -o $@ $(TOPFILE); then rm -f $@ && false; fi
 
 ifeq (,$(filter clean full_clean,$(MAKECMDGOALS)))
 include .depends.mk
