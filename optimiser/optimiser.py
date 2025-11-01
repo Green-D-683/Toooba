@@ -3,5 +3,3 @@
 import args;
 
 import db;
-
-db._db_test();

@@ -22,7 +22,7 @@ parser.add_argument("-d", "--debug", action="store_true", help = "Enable Debug P
 
 parser.add_argument("--db_file", type=str, default="optimiser.db", help = "File to be used for the database - default `optimiser.db`");
 
-parser.add_argument("--table", type=str, default="toooba-optimisation", help = "Name of the main results table in the database - default `toooba-optimisation`");
+parser.add_argument("--table", type=str, default="toooba_optimisation", help = "Name of the main results table in the database - default `toooba_optimisation`");
 
 #================================================================================================================#
 # Toooba Parameters
@@ -30,6 +30,13 @@ parser.add_argument("--table", type=str, default="toooba-optimisation", help = "
 
 parser.add_argument("--param_file", type=str, default = path.join(path.sep.join((__file__.split(path.sep)[:-2])), "builds", "Resources", "Include_RISCY_Parameters.mk"), help = "File used to discover Toooba Parameters (must be a *.mk file with only `PARAM ?= <default>` definitions for each parameter) - default `$(REPO)/builds/Resources/Include_RISCY_Parameters.mk`");
 
+def _get_params()->list[str]:
+    with open(parser.parse_args().param_file, "r") as f:
+        ls:list[str] = f.readlines();
+    return [(l.split("?=")[0]).strip() for l in ls];
+
 #================================================================================================================#
 
 parsed_args:Namespace = parser.parse_args()
+
+PARAMS:list[str] = _get_params();
