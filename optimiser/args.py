@@ -28,13 +28,21 @@ parser.add_argument("--table", type=str, default="toooba_optimisation", help = "
 # Toooba Parameters
 #================================================================================================================#
 
-parser.add_argument("--param_file", type=str, default = path.join(path.sep.join((__file__.split(path.sep)[:-2])), "builds", "Resources", "Include_RISCY_Parameters.mk"), help = "File used to discover Toooba Parameters (must be a *.mk file with only `PARAM ?= <default>` definitions for each parameter) - default `$(REPO)/builds/Resources/Include_RISCY_Parameters.mk`");
+(lambda default: parser.add_argument("--param_file", type=str, default = default, help = f"File used to discover Toooba Parameters (must be a *.mk file with only `PARAM ?= <default>` definitions for each parameter) - default `{default}`")) (f"/{path.join(*(__file__.split(path.sep)[:-2]), "builds", "Resources", "Include_RISCY_Parameters.mk")}");
 
 def _get_params()->list[str]:
     with open(parser.parse_args().param_file, "r") as f:
         ls:list[str] = f.readlines();
     return [(l.split("?=")[0]).strip() for l in ls];
 
+#================================================================================================================#
+# Email Arguments
+#================================================================================================================#
+
+(lambda default: parser.add_argument("--email_json", type=str, default=default, help = f"JSON object file used to configure email notifications for iteration ends - default `{default}`")) (f"/{path.join(*(__file__.split(path.sep)[:-1]), "email.json")}");
+
+#================================================================================================================#
+# Parse Arguments and setup global values
 #================================================================================================================#
 
 parsed_args:Namespace = parser.parse_args()

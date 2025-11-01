@@ -1,0 +1,10 @@
+{
+    "server": "",
+    "port": 587,
+    
+    "username": "",
+    "//password": "// Set to null to be asked for password on program start",
+    "password": null,
+   
+    "send_to": ""
+}
