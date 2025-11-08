@@ -19,7 +19,7 @@ ifeq (,$(filter clean full_clean,$(MAKECMDGOALS)))
 include .depends.mk
 endif
 
-%.bo:
+build_dir/%.bo: build_dir $(filter %/$(patsubst build_dir/%.bo,%.bsv,$@),$(BSC_DEPS)) 
 	$(info building $@)
 	bsc -elab -sim  $(TMP_DIRS)  $(RTL_GEN_DIRS)  $(BSC_COMPILATION_FLAGS)  -p $(BSC_PATH) $<
 

@@ -15,21 +15,25 @@ build_dir:
 Verilog_RTL:
 	mkdir -p $@
 
-%.bo:
-	echo $@
+build_dir/%.bo: build_dir $(filter %/$(patsubst build_dir/%.bo,%.bsv,$@),$(BSC_DEPS)) 
+	@echo $@ 
 	bsc -verilog -elab $(RTL_GEN_DIRS) $(BSC_COMPILATION_FLAGS) -p $(BSC_PATH) $<
 
+Verilog_RTL/mk%.v: Verilog_RTL $(patsubst Verilog_RTL/mk%.v,build_dir/%.bo,$@) 
+
 .depends.mk: build_dir Verilog_RTL
-	if ! bluetcl -exec makedepend -verilog -elab  $(RTL_GEN_DIRS)  $(BSC_COMPILATION_FLAGS) -p $(BSC_PATH) -o $@ $(TOPFILE); then rm -f $@ && false; fi
+	@if ! bluetcl -exec makedepend -verilog -elab  $(RTL_GEN_DIRS)  $(BSC_COMPILATION_FLAGS) -p $(BSC_PATH) -o $@ $(TOPFILE); then rm -f $@ && false; fi
 
 ifeq (,$(filter clean full_clean,$(MAKECMDGOALS)))
 include .depends.mk
 endif
 
+
+
 .PHONY: compile
 compile: Verilog_RTL/mkTop_HW_Side.v
-#Verilog_RTL/mkTop_HW_Side.v:  build_dir Verilog_RTL /tmp/src_dir $(VERILOG_SUB_MODULES)
-Verilog_RTL/mkTop_HW_Side.v: $(TOPFILE) build_dir/Top_HW_Side.bo build_dir Verilog_RTL
+#Verilog_RTL/mkTop_HW_Side.v:  build_dir Verilog_RTL /tmp/src_dir $(VERILOG_SUB_MODULES) ## !  build_dir/Top_HW_Side.bo build_dir Verilog_RTL
+Verilog_RTL/mkTop_HW_Side.v: $(TOPFILE)
 	@echo  "INFO: Verilog RTL generation ..."
 	bsc -u -verilog  $(RTL_GEN_DIRS)  $(BSC_COMPILATION_FLAGS) -p $(BSC_PATH) $<
 	@echo  "INFO: Verilog RTL generation finished"
@@ -95,6 +99,8 @@ simulator: Verilog_RTL/mkTop_HW_Side.v
 
 # Calculate area measurement with Quartus
 
-quartus: compile
-	quartus_map $(REPO)/Quartus/Toooba.qpf -c $(REPO)/Quartus/mkCoreW.qsf > quartus_artifacts/quartus_output
+QUARTUS_DIR ?= $(REPO)/Quartus
+
+quartus: Verilog_RTL/mkCoreW.v
+	quartus_map $(QUARTUS_DIR)/Toooba.qpf -c $(QUARTUS_DIR)/mkCoreW.qsf > quartus_artifacts/quartus_output
 	cat quartus_artifacts/quartus_output | grep -E "Implemented ([0-9]+) device resources" -A 5 > quartus_artifacts/quartus_size

@@ -45,9 +45,9 @@ BSC_PATH = $(ALL_RISCY_DIRS):$(CORE_DIRS):$(TESTBENCH_DIRS):$(BLUESTUFF_DIRS):+
 
 BSC_DEPS = $(filter %.bsv,$(wildcard $(foreach dir,$(strip $(subst +,,$(subst :, ,$(BSC_PATH)))),$(dir)/* )))
 
-compile: $(BSC_DEPS)
+# compile: $(BSC_DEPS)
 
-simulator: compile
+# simulator: compile
 
 # ----------------
 # Top-level file and module
@@ -93,9 +93,13 @@ TESTS_DIR ?= $(REPO)/Tests
 
 VERBOSITY ?= +v1
 
+$(TESTS_DIR)/elf_to_hex: 
+	make -C $(TESTS_DIR)/elf_to_hex
+
+exe_HW_sim: simulator
+
 .PHONY: test
-test:
-	make -C  $(TESTS_DIR)/elf_to_hex
+test: $(TESTS_DIR)/elf_to_hex
 	$(TESTS_DIR)/elf_to_hex/elf_to_hex  $(TESTS_DIR)/isa/$(TEST)  Mem.hex
 	./exe_HW_sim  $(VERBOSITY)  +tohost
 
@@ -103,22 +107,22 @@ test:
 # ISA Regression testing
 
 .PHONY: isa_tests
-isa_tests: simulator
+isa_tests: exe_HW_sim $(TESTS_DIR)/elf_to_hex
 	@echo "Running regressions on ISA tests; saving logs in Logs/"
-	$(REPO)/Tests/Run_regression.py  ./exe_HW_sim  $(REPO)  ./Logs  $(ARCH)
+	$(TESTS_DIR)/Run_regression.py  ./exe_HW_sim  $(REPO)  ./Logs  $(ARCH)
 	@echo "Finished running regressions; saved logs in Logs/"
 
 # ================================================================
 # Benchmarks
 
-TIMESTAMP := $(shell date +%Y-%m-%d_%H-%M-%S)
+TIMESTAMP ?= $(shell date +%Y-%m-%d_%H-%M-%S)
 
 .PHONY: benchmarks
-benchmarks: simulator
+benchmarks: exe_HW_sim $(TESTS_DIR)/elf_to_hex
 	@echo "Running benchmarks; saving logs in Logs/"
-	$(REPO)/Tests/Run_benchmarks.py  ./exe_HW_sim  $(REPO)  ./Logs
+	$(TESTS_DIR)/Run_benchmarks.py  ./exe_HW_sim  $(REPO)  ./Logs
 	@echo "Finished running benchmarks"
-	$(REPO)/Tests/benchmarks/report_log.sh benchmark_results_$(TIMESTAMP).csv Logs/*.bin.log
+	$(TESTS_DIR)/benchmarks/report_log.sh benchmark_results_$(TIMESTAMP).csv Logs/*.bin.log
 # ================================================================
 
 .PHONY: clean
@@ -126,7 +130,7 @@ clean:
 	rm -r -f  *~  Makefile_*  symbol_table.txt  build_dir/*  obj_dir Verilog_RTL/*
 
 .PHONY: full_clean
-full_clean: clean
+full_clean:: clean
 	rm -r -f  $(SIM_EXE_FILE)*  *.log  *.vcd  *.hex  Logs/
 
 # ================================================================
