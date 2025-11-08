@@ -32,7 +32,7 @@ parser.add_argument("--table", type=str, default="toooba_optimisation", help = "
 
 def _get_params()->list[str]:
     with open(parser.parse_args().param_file, "r") as f:
-        ls:list[str] = f.readlines();
+        ls:list[str] = filter((lambda l: "?=" in l), f.readlines());
     return [(l.split("?=")[0]).strip() for l in ls];
 
 #================================================================================================================#
