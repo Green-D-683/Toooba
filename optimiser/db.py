@@ -18,22 +18,23 @@ type dbItem = typing.Union[str, float, int];
 type dbRow = dict[str:dbItem];
 
 def _ppOut(table:list[dbRow]) -> None:
+    if len(table) > 0:
 
-    header:list[str] = list(table[0].keys());
-    rows:list[list[dbItem]] = [header] + ([list(row.values()) for row in table]);
-    colLens:list[int] = [ max(len(str(rows[i][colNum])) for i in range(len(rows))) for colNum in range(len(rows[0])) ]
-    
-    hline = lambda : print(f"+{"+".join(["-"*(colLen+2) for colLen in colLens])}+")
+        header:list[str] = list(table[0].keys());
+        rows:list[list[dbItem]] = [header] + ([list(row.values()) for row in table]);
+        colLens:list[int] = [ max(len(str(rows[i][colNum])) for i in range(len(rows))) for colNum in range(len(rows[0])) ]
+        
+        hline = lambda : print(f"+{"+".join(["-"*(colLen+2) for colLen in colLens])}+")
 
-    hline()
-    print(f"| {" | ".join([str(item).center(colLen) for item, colLen in zip(header, colLens)])} |");
-    hline()
+        hline()
+        print(f"| {" | ".join([str(item).center(colLen) for item, colLen in zip(header, colLens)])} |");
+        hline()
 
-    #row:list[dbItem];
-    for row in rows[1:]:
-        #item:dbItem; colLen:int;
-        print(f"| {" | ".join([str(item).center(colLen) for item, colLen in zip(row, colLens)])} |");
-    hline()
+        #row:list[dbItem];
+        for row in rows[1:]:
+            #item:dbItem; colLen:int;
+            print(f"| {" | ".join([str(item).center(colLen) for item, colLen in zip(row, colLens)])} |");
+        hline()
 
 #================================================================================================================#
 # Database + Other Toooba Parameters - 
