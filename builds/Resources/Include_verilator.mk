@@ -101,6 +101,7 @@ simulator: Verilog_RTL/mkTop_HW_Side.v
 
 QUARTUS_DIR ?= $(REPO)/Quartus
 
-quartus: Verilog_RTL/mkCoreW.v
+quartus: Verilog_RTL/mkCoreW.v $(QUARTUS_DIR)/Toooba.qpf $(QUARTUS_DIR)/mkCoreW.qsf
+	mkdir -p quartus_artifacts
 	quartus_map $(QUARTUS_DIR)/Toooba.qpf -c $(QUARTUS_DIR)/mkCoreW.qsf > quartus_artifacts/quartus_output
 	cat quartus_artifacts/quartus_output | grep -E "Implemented ([0-9]+) device resources" -A 5 > quartus_artifacts/quartus_size
