@@ -112,18 +112,19 @@ def _calculate_perf(perfPath:PathLike) -> float:
     Returns:
         float: Ratio of the Parameterisation's Performance to base Toooba
     """
+
+    perfs:list[float] = [];
+
     with open(perfPath, "r") as perf_file:
         csvPerf:list[dict] = DictReader(perf_file);
 
-    with open("benchmark_res_initial.csv", "r") as initial_perf_file:
-        initialPerf:list[dict] = DictReader(initial_perf_file);
+        with open("benchmark_res_initial.csv", "r") as initial_perf_file:
+            initialPerf:list[dict] = DictReader(initial_perf_file);
     
-    perfs:list[float] = [];
-    for row in csvPerf:
-        bench:str = row["Log"];
-        initRow:dict = filter((lambda r: r["Log"] == bench), initialPerf);
-        perfs.append(csvPerf["Cycles"] / initRow["Cycles"]); # ! Shouldn't this be reversed? Surely More Cycles is worse?
-
+            for row in csvPerf:
+                bench:str = row["Log"];
+                initRow:dict = filter((lambda r: r["Log"] == bench), initialPerf);
+                perfs.append(initRow["Cycles"] / csvPerf["Cycles"]);
     return sum(perfs) / len(perfs);
 
 def _calculate_area(areaPath:PathLike) -> float:
