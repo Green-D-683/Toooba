@@ -8,4 +8,4 @@ def dprintf(pattern:str, *args, **kwargs):
         pattern (str): Pattern of string to print
     """
     if parsed_args.debug:
-        print(pattern.format(*args, **kwargs))
+        print(pattern.format(*args, **kwargs), flush=True);
