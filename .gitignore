@@ -19,7 +19,7 @@ vpi_wrapper_*
 
 .direnv
 *.tap
-*.csv
+benchmark_results_*.csv
 
 .depends.mk
 BlueSpec-Verilog
@@ -33,3 +33,5 @@ quartus_artifacts
 
 optimiser.db
 email.json
+*_Toooba_optimiser_[0-9]*
+optimiser_artifacts
