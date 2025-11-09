@@ -35,6 +35,11 @@ def _get_params()->list[str]:
         ls:list[str] = filter((lambda l: "?=" in l), f.readlines());
     return [(l.split("?=")[0]).strip() for l in ls];
 
+def _get_param_values()->dict[str, int]:
+    with open(parser.parse_args().param_file, "r") as f:
+        ls:list[str] = filter((lambda l: "?=" in l), f.readlines());
+    return {(l.split("?=")[0]).strip() : int((l.split("?=")[1]).strip()) for l in ls};
+
 #================================================================================================================#
 # Email Arguments
 #================================================================================================================#
@@ -48,3 +53,4 @@ def _get_params()->list[str]:
 parsed_args:Namespace = parser.parse_args()
 
 PARAMS:list[str] = _get_params();
+PARAM_DEFAULTS:dict[str,int] = _get_param_values();
