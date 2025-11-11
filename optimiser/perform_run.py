@@ -123,7 +123,7 @@ def _calculate_perf(perfPath:PathLike) -> float:
     
             for row in csvPerf:
                 bench:str = row["Log"];
-                initRow:dict = filter((lambda r: r["Log"] == bench), initialPerf);
+                initRow:dict = list(filter((lambda r: r["Log"] == bench), initialPerf))[0];
                 perfs.append(initRow["Cycles"] / csvPerf["Cycles"]);
     return sum(perfs) / len(perfs);
 
