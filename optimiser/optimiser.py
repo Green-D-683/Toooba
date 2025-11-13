@@ -11,7 +11,7 @@ import traceback;
 import args;
 from db import add_run;
 import send_email;
-from perform_run import create_run, Manager, RunRetObj
+from perform_run import create_run, Manager, RunRetObj, Process, Queue
 
 # Set Datetime in db
 from datetime import datetime
@@ -36,11 +36,20 @@ def initialSweep() -> None:
     # Create Multiprocessing Manager
     man = Manager();
 
+    procs:list[Process] = [];
+    qs:list[Queue] = [];
+
     # Perform initial runs
     run = 0;
-    for parameterisation in run_params:
-        proc, q = create_run(0, [0, run], parameterisation, man);
-        proc.run();
+    for parameterisation, i in zip(run_params, range(len(run_params))):
+        proc, q = create_run(i, [0, run], parameterisation, man);
+        procs.append(proc);
+        qs.append(q);
+
+    for proc in procs:
+        proc.start();
+    
+    for q in qs:
         res:RunRetObj = q.get();
         add_run(0, datetime.now().isoformat(), res["performance"], res["area"], res["params"]);
 
