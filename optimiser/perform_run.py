@@ -4,7 +4,7 @@
 # Imports
 #================================================================================================================#
 
-from os import chdir, cpu_count, getenv, makedirs as mkdir, getcwd, PathLike, environ;
+from os import chdir, cpu_count, getenv, makedirs as mkdir, getcwd, PathLike, environ, nice;
 from os.path import exists, join;
 
 # Used for calling other programs from within Python
@@ -116,15 +116,15 @@ def _calculate_perf(perfPath:PathLike) -> float:
     perfs:list[float] = [];
 
     with open(perfPath, "r") as perf_file:
-        csvPerf:list[dict] = DictReader(perf_file);
+        csvPerf:list[dict] = list(DictReader(perf_file, skipinitialspace=True));
 
         with open("benchmark_res_initial.csv", "r") as initial_perf_file:
-            initialPerf:list[dict] = DictReader(initial_perf_file);
+            initialPerf:list[dict] = list(DictReader(initial_perf_file, skipinitialspace=True));
     
             for row in csvPerf:
                 bench:str = row["Log"];
                 initRow:dict = list(filter((lambda r: r["Log"] == bench), initialPerf))[0];
-                perfs.append(initRow["Cycles"] / csvPerf["Cycles"]);
+                perfs.append(int(initRow["Cycles"]) / int(row["Cycles"]));
     return sum(perfs) / len(perfs);
 
 def _calculate_area(areaPath:PathLike) -> float:
@@ -179,6 +179,8 @@ def _do_run(index:int, itrun:tuple[int, int], params:dict[str,int], ret:Queue) -
         params (dict[str, int]): Parameterisation to be explored during the run
         man (SyncManager): Multiprocessing Manager able to synchronise return Queues
     """
+
+    nice(5); # Prevent System Throttling when many parallel runs
 
     # Setting up Directories
     proc_dir = master_dir.replace("verilator", (f"optimiser_{index}"));
