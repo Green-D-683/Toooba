@@ -40,9 +40,8 @@ def initialSweep() -> None:
     qs:list[Queue] = [];
 
     # Perform initial runs
-    run = 0;
-    for parameterisation, i in zip(run_params, range(len(run_params))):
-        proc, q = create_run(i, [0, run], parameterisation, man);
+    for parameterisation, run in zip(run_params, range(len(run_params))):
+        proc, q = create_run(run, [0, run], parameterisation, man);
         procs.append(proc);
         qs.append(q);
 

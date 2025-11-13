@@ -17,9 +17,10 @@ Verilog_RTL:
 
 build_dir/%.bo: build_dir $(filter %/$(patsubst build_dir/%.bo,%.bsv,$@),$(BSC_DEPS)) 
 	@echo $@ 
-	bsc -verilog -elab $(RTL_GEN_DIRS) $(BSC_COMPILATION_FLAGS) -p $(BSC_PATH) $<
+	bsc -verilog -elab $(RTL_GEN_DIRS) $(BSC_COMPILATION_FLAGS) -p $(BSC_PATH) $(filter %/$(patsubst build_dir/%.bo,%.bsv,$@),$(BSC_DEPS))
 
-Verilog_RTL/mk%.v: Verilog_RTL $(patsubst Verilog_RTL/mk%.v,build_dir/%.bo,$@) 
+Verilog_RTL/mk%.v: Verilog_RTL $(patsubst %,build_dir/%.bo,%) 
+	@echo $(patsubst Verilog_RTL/mk%.v,build_dir/%.bo,$@)
 
 .depends.mk: build_dir Verilog_RTL
 	@if ! bluetcl -exec makedepend -verilog -elab  $(RTL_GEN_DIRS)  $(BSC_COMPILATION_FLAGS) -p $(BSC_PATH) -o $@ $(TOPFILE); then rm -f $@ && false; fi

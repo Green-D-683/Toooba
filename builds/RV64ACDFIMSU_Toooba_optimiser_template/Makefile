@@ -44,7 +44,7 @@ TEST ?= rv64ui-p-add
 BSC_COMPILATION_FLAGS += -D BSIM
 
 
-include ./Include_Generated_Params.mk
+-include ./Include_Generated_Params.mk
 
 include $(REPO)/builds/Resources/Include_RISCY_Config.mk
 
