@@ -39,7 +39,7 @@ from debug import dprintf;
 master_dir = getcwd();
 _mkJobs = 18; # TODO Should parameterise into argument
 _makeCommand = lambda cmd: ["/usr/bin/env", "make", cmd, f"-j{_mkJobs}"];
-_exec = lambda cmdArr, env={}: run(cmdArr, capture_output=True, text=True, shell=True, check=True, env={**dict(environ), **env});
+_exec = lambda cmdArr, env={}: run(cmdArr, capture_output=True, text=True, check=True, env={**dict(environ), **env});
 
 #================================================================================================================#
 # The main export - creates a view of the subprocess performing the run - allows for multithreading of subprocesses
