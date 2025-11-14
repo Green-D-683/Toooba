@@ -59,11 +59,20 @@ include $(REPO)/builds/Resources/Include_Common.mk
 include $(REPO)/builds/Resources/Include_verilator.mk
 
 full_clean::
-	rm Include_Generated_Params.mk
+	rm -f Include_Generated_Params.mk
+
+ifdef BLUESPEC_VERILOG_LIB
+QUARTUS_BLUESPEC_INCLUDE = $(subst /,\/,$(BLUESPEC_VERILOG_LIB))
+else 
+QUARTUS_BLUESPEC_INCLUDE = ..\/..\/BlueSpec-Verilog
+endif
 
 setup_quartus: $(REPO)/Quartus/Toooba.qpf $(REPO)/Quartus/mkCoreW.qsf
 	cp -f $(REPO)/Quartus/Toooba.qpf $(QUARTUS_DIR)/Toooba.qpf
-	sed "s/..\/builds\/RV64ACDFIMSU_Toooba_verilator/./g" $(REPO)/Quartus/mkCoreW.qsf | sed "s/..\/BlueSpec-Verilog/..\/..\/BlueSpec-Verilog/" > $(QUARTUS_DIR)/mkCoreW.qsf
+	sed "s/..\/builds\/RV64ACDFIMSU_Toooba_verilator/./g" $(REPO)/Quartus/mkCoreW.qsf | sed "s/..\/BlueSpec-Verilog/$(QUARTUS_BLUESPEC_INCLUDE)/" > $(QUARTUS_DIR)/mkCoreW.qsf
 
 $(QUARTUS_DIR)/mkCoreW.qsf: setup_quartus
 $(QUARTUS_DIR)/Toooba.qpf: setup_quartus
+
+thing:
+	@echo $(QUARTUS_BLUESPEC_INCLUDE)
