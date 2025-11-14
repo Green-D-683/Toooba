@@ -93,13 +93,13 @@ TESTS_DIR ?= $(REPO)/Tests
 
 VERBOSITY ?= +v1
 
-$(TESTS_DIR)/elf_to_hex: 
+$(TESTS_DIR)/elf_to_hex/elf_to_hex: 
 	make -C $(TESTS_DIR)/elf_to_hex
 
 exe_HW_sim: simulator
 
 .PHONY: test
-test: $(TESTS_DIR)/elf_to_hex
+test: $(TESTS_DIR)/elf_to_hex/elf_to_hex
 	$(TESTS_DIR)/elf_to_hex/elf_to_hex  $(TESTS_DIR)/isa/$(TEST)  Mem.hex
 	./exe_HW_sim  $(VERBOSITY)  +tohost
 
@@ -118,7 +118,7 @@ isa_tests: exe_HW_sim $(TESTS_DIR)/elf_to_hex
 TIMESTAMP ?= $(shell date +%Y-%m-%d_%H-%M-%S)
 
 .PHONY: benchmarks
-benchmarks: exe_HW_sim $(TESTS_DIR)/elf_to_hex
+benchmarks: exe_HW_sim $(TESTS_DIR)/elf_to_hex/elf_to_hex
 	@echo "Running benchmarks; saving logs in Logs/"
 	$(TESTS_DIR)/Run_benchmarks.py  ./exe_HW_sim  $(REPO)  ./Logs
 	@echo "Finished running benchmarks"
