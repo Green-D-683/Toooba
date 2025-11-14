@@ -39,7 +39,7 @@ from debug import dprintf;
 master_dir = getcwd();
 _mkJobs = 18; # TODO Should parameterise into argument
 _makeCommand = lambda cmd: ["/usr/bin/env", "make", cmd, f"-j{_mkJobs}"];
-_exec = lambda cmdArr, env={}: run(cmdArr, capture_output=True, text=True, check=True, env={**dict(environ), **env});
+_exec = lambda cmdArr, env={}: run(cmdArr, capture_output=True, text=True, env={**dict(environ), **env});
 
 #================================================================================================================#
 # The main export - creates a view of the subprocess performing the run - allows for multithreading of subprocesses
@@ -109,7 +109,7 @@ def _write_log(logdir:PathLike, filename:str, text:str):
 def _make_call_log(logdir:PathLike, cmd:str, env:dict[str,str]={}):
     res:CompletedProcess = _exec(_makeCommand(cmd), env);
     _write_log(logdir, f"make_{cmd}.out", res.stdout);
-    _write_log(logdir, f"make{cmd}.err", res.stderr);
+    _write_log(logdir, f"make_{cmd}.err", res.stderr);
     dprintf(res.stderr);
 
     # TODO Handle failed commands safely?
