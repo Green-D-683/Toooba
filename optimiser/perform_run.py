@@ -30,7 +30,7 @@ class RunRetObj(TypedDict):
     area: float;
 
 # debug printing
-from debug import dprintf;
+from debug import dprintf, emailWarn;
 
 #================================================================================================================#
 # Global Definitions - known at start-time
@@ -59,7 +59,7 @@ def create_run(index: int, itrun:tuple[int, int], params:dict[str, int], man:Syn
         tuple[Process, Queue]: The Process object (not yet started), and the return Queue for the run
     """    
     q:Queue = man.Queue();
-    return (Process(target=_do_run, kwargs = {"index":index, "itrun":itrun, "params":params, "ret":q}), q);
+    return (Process(target=_do_run_wrapped, kwargs = {"index":index, "itrun":itrun, "params":params, "ret":q}), q);
 
 #================================================================================================================#
 # Subroutines Used in Implementing the Run
@@ -236,6 +236,18 @@ def _do_run(index:int, itrun:tuple[int, int], params:dict[str,int], ret:Queue) -
 
     # Build and Enqueue Return Object
     ret.put(RunRetObj(index = index, params = params, performance = performance, area = area));
+
+def _do_run_wrapped(index:int, itrun:tuple[int, int], params:dict[str,int], ret:Queue) -> None:
+    """
+    Wrap _do_run in an error handler that will email in case of an Exception being raised
+
+    Args:
+        index (int): The process index - used to determine working directory
+        itrun (tuple[int, int]): Iteration/Run Indices - Used for debugging and return value identification
+        params (dict[str, int]): Parameterisation to be explored during the run
+        man (SyncManager): Multiprocessing Manager able to synchronise return Queues
+    """    
+    emailWarn(f"optimisation process {index} - {itrun}", _do_run, index, itrun, params, ret);
 
 #================================================================================================================#
 # Testing

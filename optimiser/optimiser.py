@@ -4,13 +4,10 @@
 # Imports
 #================================================================================================================#
 
-# Crash Handler
-import traceback;
-
 # Local Imports
 import args;
 from db import add_run;
-import send_email;
+from debug import emailWarn;
 from perform_run import create_run, Manager, RunRetObj, Process, Queue
 
 # Set Datetime in db
@@ -51,6 +48,9 @@ def initialSweep() -> None:
     for proc in procs:
         proc.start();
     
+    # Don't leave zombies...
+    [p.join() for p in procs]
+
     for q in qs:
         res:RunRetObj = q.get();
         add_run(0, datetime.now().isoformat(), res["performance"], res["area"], res["params"]);
@@ -68,25 +68,11 @@ def main() -> None:
     initialSweep();
 
 #================================================================================================================#
-# Call Site for `main()` - Crash Handler
+# Call Site for `main()` - Crash Handler `emailWarn`
 #================================================================================================================#
 
 if __name__=="__main__":
-    try:
-        # Main program goes here - thus an uncaught exception will trigger an email warning
-        main();
-        # Testing warning system
-        # raise FutureWarning()
-    except BaseException as e:
-        send_email.send_email(f"FAILURE - `optimiser.py` on {send_email.hostname()}", f"""\
-Optimiser Process failed on {send_email.hostname()}:
-
-{str(e)}
-
-Trace:
-{traceback.format_exc()}
-""");
-        raise e;
+    emailWarn("optimiser.py", main);
 
 
 # ! USER_CLK_PERIOD is dummy value passed through to FPGA Synthesis
