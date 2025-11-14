@@ -1,6 +1,7 @@
 from args import parsed_args
 from send_email import send_email, hostname
 from traceback import format_exc
+from types import FunctionType
 
 def dprintf(pattern:str, *args, **kwargs):
     """
@@ -12,7 +13,7 @@ def dprintf(pattern:str, *args, **kwargs):
     if parsed_args.debug:
         print(pattern.format(*args, **kwargs), flush=True);
 
-def emailWarn(id:str, fn:function, *args, **kwargs):
+def emailWarn(id:str, fn:FunctionType, *args, **kwargs):
     try:
         # Main program goes here - thus an uncaught exception will trigger an email warning
         fn(*args, **kwargs);
