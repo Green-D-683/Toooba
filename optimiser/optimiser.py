@@ -20,6 +20,9 @@ from datetime import datetime
 # Optimiser Programs
 #================================================================================================================#
 
+def initialValues() -> None:
+    pass # TODO - generate `benchmark_res_initial.csv` and `quartus_initial_size`
+
 def initialSweep() -> None:
     """
     Perform an initial sweep of parameters - determine likely candidates for decrease

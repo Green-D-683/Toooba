@@ -102,6 +102,18 @@ def _setup_log_dir(dir:PathLike) -> None:
     """    
     _mkdirIfNotExists(dir);
 
+def _write_log(logdir:PathLike, filename:str, text:str):
+    with open(join(logdir, filename), "x") as f:
+        f.writelines(text);
+
+def _make_call_log(logdir:PathLike, cmd:str, env:dict[str,str]={}):
+    res:CompletedProcess = _exec(_makeCommand(cmd), env);
+    _write_log(logdir, f"make_{cmd}.out", res.stdout);
+    _write_log(logdir, f"make{cmd}.err", res.stderr);
+    dprintf(res.stderr);
+
+    # TODO Handle failed commands safely?
+
 def _calculate_perf(perfPath:PathLike) -> float:
     """
     Calculate the relative performance to base Toooba of the Parameterisation
@@ -196,25 +208,21 @@ def _do_run(index:int, itrun:tuple[int, int], params:dict[str,int], ret:Queue) -
         for param in params.keys():
             param_file.write(f"{param} = {params[param]}\n");
 
-    # `make compile`
-    mcompile:CompletedProcess = _exec(_makeCommand("compile"));
-    dprintf(mcompile.stderr);
+    # `make compile
+    _make_call_log(log_dir, "compile");
 
     # TODO - Quartus can run in parallel as soon as compile is done, alongside simulator and benchmarks - how to async execute subprocess?
 
     # `make simulator`
-    msimulator = _exec(_makeCommand("simulator"));
-    dprintf(msimulator.stderr);
+    _make_call_log(log_dir, "simulator");
 
     # 'make benchmarks`
-    mbenchmarks = _exec(_makeCommand("benchmarks"), {"TIMESTAMP": f"{itrun[0]}_{itrun[1]}"});
-    dprintf(mbenchmarks.stderr);
+    _make_call_log(log_dir, "benchmarks", {"TIMESTAMP": f"{itrun[0]}_{itrun[1]}"})
     # Copy Benchmarks results summary
     copy(f"{proc_dir}/benchmark_results_{itrun[0]}_{itrun[1]}.csv", f"{log_dir}/benchmark_results.csv");
 
     # `make quartus`
-    mquartus = _exec(_makeCommand("quartus"));
-    dprintf(mquartus.stderr);
+    _make_call_log(log_dir, "quartus")
     # Copy Quartus Area Report
     copy(f"{proc_dir}/quartus_artifacts/quartus_size", f"{log_dir}/quartus_size");
 
