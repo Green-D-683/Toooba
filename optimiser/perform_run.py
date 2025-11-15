@@ -103,7 +103,7 @@ def _setup_log_dir(dir:PathLike) -> None:
     _mkdirIfNotExists(dir);
 
 def _write_log(logdir:PathLike, filename:str, text:str):
-    with open(join(logdir, filename), "x") as f:
+    with open(join(logdir, filename), ("r" if exists(join(logdir, filename)) else "x")) as f:
         f.writelines(text);
 
 def _make_call_log(logdir:PathLike, cmd:str, env:dict[str,str]={}):
