@@ -29,9 +29,13 @@ def initialSweep() -> None:
     param_defaults:dict[str,int] = args.PARAM_DEFAULTS;
     
     # Create Sweep Permutations
-    run_params = [ (param_defaults.copy()) for _ in param_defaults.keys()];
-    for param, parameterisation in zip(param_defaults.keys(), run_params):
-        parameterisation[param] -= 1;
+    run_params = [];
+    for param in args.PARAMS:
+        paramO = args.PARAM_OBJ[param];
+        if not (("minimum" in paramO.keys() and paramO["default"] == paramO["minimum"]) or (paramO["default"] == 1)):
+            parameterisation = param_defaults.copy();
+            parameterisation[param] -= paramO["increment"]; 
+            run_params.append(parameterisation);
 
     # Create Multiprocessing Manager
     man = Manager();

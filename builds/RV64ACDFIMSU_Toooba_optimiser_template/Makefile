@@ -73,6 +73,3 @@ setup_quartus:: $(REPO)/Quartus/Toooba.qpf $(REPO)/Quartus/mkCoreW.qsf
 
 $(QUARTUS_DIR)/mkCoreW.qsf: setup_quartus
 $(QUARTUS_DIR)/Toooba.qpf: setup_quartus
-
-thing:
-	@echo $(QUARTUS_BLUESPEC_INCLUDE)

@@ -1,0 +1,81 @@
+{
+    "LOG_L1_LINES": {
+        "default": 9,
+        "const": false,
+        "increment": 1
+    },
+    "LOG_L1_WAYS": {
+        "default": 2,
+        "const": false,
+        "increment": 1
+    },
+    "LOG_LLC_LINES": {
+        "default": 14,
+        "const": false,
+        "increment": 1
+    },
+    "LOG_LLC_WAYS": {
+        "default": 4,
+        "const": false,
+        "increment": 1
+    },
+    "sizeSup": {
+        "default": 2,
+        "const": false,
+        "increment": 1
+    },
+    "ROB_SIZE": {
+        "default": 64,
+        "const": false,
+        "increment": 16
+    },
+    "NUM_EPOCHS": {
+        "default": 12,
+        "const": false,
+        "increment": 4
+    },
+    "NUM_SPEC_TAGS": {
+        "default": 12,
+        "const": false,
+        "increment": 4
+    },
+    "L1_TLB_SIZE": {
+        "default": 32,
+        "const": true,
+        "increment": 16
+    },
+    "LDQ_SIZE": {
+        "default": 24,
+        "const": false,
+        "increment": 4
+    },
+    "STQ_SIZE": {
+        "default": 14,
+        "const": false,
+        "increment": 2
+    },
+    "SB_SIZE": {
+        "default": 4,
+        "const": false,
+        "increment": 1
+    },
+    "RS_ALU_SIZE": {
+        "default": 16,
+        "const": false,
+        "increment": 1
+    },
+    "RS_MEM_SIZE": {
+        "default": 16,
+        "const": false,
+        "increment": 1
+    },
+    "RS_FPUMULDIV_SIZE": {
+        "default": 16,
+        "const": false,
+        "increment": 1
+    },
+    "USER_CLK_PERIOD": {
+        "default": 24,
+        "const": true
+    }
+}

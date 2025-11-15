@@ -2,6 +2,14 @@
 
 from argparse import ArgumentParser, Namespace
 from os import path
+from json import loads as load_json
+from typing import TypedDict, NotRequired
+class Param(TypedDict):
+    const:bool;
+    default:int;
+    minimum:NotRequired[int];
+    increment:int;
+
 
 parser:ArgumentParser = ArgumentParser( \
     prog = "optimiser.py", \
@@ -28,17 +36,11 @@ parser.add_argument("--table", type=str, default="toooba_optimisation", help = "
 # Toooba Parameters
 #================================================================================================================#
 
-(lambda default: parser.add_argument("--param_file", type=str, default = default, help = f"File used to discover Toooba Parameters (must be a *.mk file with only `PARAM ?= <default>` definitions for each parameter) - default `{default}`")) (f"/{path.join(*(__file__.split(path.sep)[:-2]), "builds", "Resources", "Include_RISCY_Parameters.mk")}");
+(lambda default: parser.add_argument("--param_file", type=str, default = default, help = f"File used to discover Toooba Parameters (must be a json file matching the specification displayed by the default) - default `{default}`")) (f"/{path.join(*(__file__.split(path.sep)[:-1]), "param_sweep.json")}");
 
-def _get_params()->list[str]:
+def _get_params_obj()->dict[str,Param]:
     with open(parser.parse_args().param_file, "r") as f:
-        ls:list[str] = filter((lambda l: "?=" in l), f.readlines());
-    return [(l.split("?=")[0]).strip() for l in ls];
-
-def _get_param_values()->dict[str, int]:
-    with open(parser.parse_args().param_file, "r") as f:
-        ls:list[str] = filter((lambda l: "?=" in l), f.readlines());
-    return {(l.split("?=")[0]).strip() : int((l.split("?=")[1]).strip()) for l in ls};
+        return {k: v for k, v in load_json("".join(f.readlines())).items() if not v["const"]};
 
 #================================================================================================================#
 # Email Arguments
@@ -52,5 +54,7 @@ def _get_param_values()->dict[str, int]:
 
 parsed_args:Namespace = parser.parse_args()
 
-PARAMS:list[str] = _get_params();
-PARAM_DEFAULTS:dict[str,int] = _get_param_values();
+PARAM_OBJ:dict[str,Param] = _get_params_obj();
+PARAMS:list[str] = PARAM_OBJ.keys();
+PARAM_DEFAULTS:dict[str,int] = {k:v["default"] for k, v in PARAM_OBJ.items()};
+PARAM_VALUES:dict[str,int] = {k:(v["current"] if "current" in v.keys() else v["default"]) for k, v in PARAM_OBJ.items()};
