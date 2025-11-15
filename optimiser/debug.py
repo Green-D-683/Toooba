@@ -19,6 +19,8 @@ def emailWarn(id:str, fn:FunctionType, *args, **kwargs):
         fn(*args, **kwargs);
         # Testing warning system
         # raise FutureWarning()
+    except KeyboardInterrupt:
+        print("Process Killed - a subprocess died didn't it...");
     except BaseException as e:
         send_email(f"FAILURE - `{id}` on {hostname()}", f"""\
 Optimiser Process failed on {hostname()}:
