@@ -21,7 +21,7 @@ def emailWarn(id:str, fn:FunctionType, *args, **kwargs):
         # raise FutureWarning()
     except BaseException as e:
         send_email(f"FAILURE - `{id}` on {hostname()}", f"""\
-Optimiser Process failed on {send_email.hostname()}:
+Optimiser Process failed on {hostname()}:
 
 {str(e)}
 
