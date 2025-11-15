@@ -537,7 +537,9 @@ module mkFetchStage(FetchStage);
       // Pick as up to SupSize instructions from the f2d SupFifo.
       // Stop picking when we have SupSize instructions or when we have exhausted the ports on the instruction fragment FIFO.
       Maybe#(Bit#(TLog#(SupSizeX2))) m_used_frag_count = Invalid;
-      Bit#(TLog#(SupSize)) pick_count = 0;
+      // Need Special Case `TMax#` for SupSize = 1 - otherwise pick_count += 1 below doesn't compile
+      // Otherwise, this creates a 0-bit register, the incrementing of which is not type-safe
+      Bit#(TMax#(TLog#(SupSize), 1)) pick_count = 0; 
       Bool prev_frag_available = False;
       for (Integer i = 0; i < valueOf(SupSizeX2) && !isValid(decodeIn[valueOf(SupSize) - 1]); i = i + 1) begin
          Maybe#(InstrFromFetch2) new_pick = Invalid;
