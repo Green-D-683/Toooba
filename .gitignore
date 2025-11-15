@@ -36,3 +36,5 @@ email.json
 *_Toooba_optimiser_[0-9]*
 optimiser_artifacts
 optimiser.json
+benchmark_res_initial.csv
+quartus_initial_size

@@ -30,7 +30,7 @@ class RunRetObj(TypedDict):
     area: float;
 
 # debug printing
-from debug import dprintf, emailWarn;
+from debug import dprintf, emailWarn, printf_err;
 
 #================================================================================================================#
 # Global Definitions - known at start-time
@@ -45,7 +45,7 @@ _exec = lambda cmdArr, env={}: run(cmdArr, capture_output=True, text=True, env={
 # The main export - creates a view of the subprocess performing the run - allows for multithreading of subprocesses
 #================================================================================================================#
 
-def create_run(index: int, itrun:tuple[int, int], params:dict[str, int], man:SyncManager) -> tuple[Process, Queue]:
+def create_run(index: int, itrun:tuple[int, int], params:dict[str, int], man:SyncManager, calc:bool=True) -> tuple[Process, Queue]:  
     """
     Create a Subprocess, set to perform the specified run
 
@@ -54,12 +54,18 @@ def create_run(index: int, itrun:tuple[int, int], params:dict[str, int], man:Syn
         itrun (tuple[int, int]): Iteration/Run Indices - Used for debugging and return value identification
         params (dict[str, int]): Parameterisation to be explored during the run
         man (SyncManager): Multiprocessing Manager able to synchronise return Queues
+        calc (bool, optional): Calculate Results? Defaults to True.
 
     Returns:
         tuple[Process, Queue]: The Process object (not yet started), and the return Queue for the run
-    """    
+    """
+    # Check the existence of the initial value files needed for calc - exit if not found
+    if calc and not (exists(join(getcwd(), "benchmark_res_initial.csv")) and exists(join(getcwd(), "quartus_initial_size"))):
+        printf_err("Cannot find one or more initial area/performance files - did you run `make optimiser_init`")
+        exit(1)
+    
     q:Queue = man.Queue();
-    return (Process(target=_do_run_wrapped, kwargs = {"index":index, "itrun":itrun, "params":params, "ret":q}), q);
+    return (Process(target=_do_run_wrapped, kwargs = {"index":index, "itrun":itrun, "params":params, "ret":q, "calc":calc}), q);
 
 #================================================================================================================#
 # Subroutines Used in Implementing the Run
@@ -181,7 +187,7 @@ def _calculate_area(areaPath:PathLike) -> float:
 # Performing the run
 #================================================================================================================#
 
-def _do_run(index:int, itrun:tuple[int, int], params:dict[str,int], ret:Queue) -> None:
+def _do_run(index:int, itrun:tuple[int, int], params:dict[str,int], ret:Queue, calc:bool = True) -> None:
     """
     Perform a run, usually executed from inside a subprocess, and return the relative area and performance down a FIFO
 
@@ -190,6 +196,7 @@ def _do_run(index:int, itrun:tuple[int, int], params:dict[str,int], ret:Queue) -
         itrun (tuple[int, int]): Iteration/Run Indices - Used for debugging and return value identification
         params (dict[str, int]): Parameterisation to be explored during the run
         man (SyncManager): Multiprocessing Manager able to synchronise return Queues
+        calc (bool, optional): Calculate Results? Defaults to True.
     """
 
     nice(5); # Prevent System Throttling when many parallel runs
@@ -230,14 +237,17 @@ def _do_run(index:int, itrun:tuple[int, int], params:dict[str,int], ret:Queue) -
     chdir(master_dir);
     rmtree(proc_dir);
 
-    # Calculate Performance and Area from Artifacts
-    performance:float = _calculate_perf(f"{log_dir}/benchmark_results.csv");
-    area:float = _calculate_area(f"{log_dir}/quartus_size");
+    if calc:
+        # Calculate Performance and Area from Artifacts
+        performance:float = _calculate_perf(f"{log_dir}/benchmark_results.csv");
+        area:float = _calculate_area(f"{log_dir}/quartus_size");
 
-    # Build and Enqueue Return Object
-    ret.put(RunRetObj(index = index, params = params, performance = performance, area = area));
+        # Build and Enqueue Return Object
+        ret.put(RunRetObj(index = index, params = params, performance = performance, area = area));
+    else:
+        ret.put("DONE")
 
-def _do_run_wrapped(index:int, itrun:tuple[int, int], params:dict[str,int], ret:Queue) -> None:
+def _do_run_wrapped(index:int, itrun:tuple[int, int], params:dict[str,int], ret:Queue, calc:bool = True) -> None:
     """
     Wrap _do_run in an error handler that will email in case of an Exception being raised
 
@@ -246,6 +256,7 @@ def _do_run_wrapped(index:int, itrun:tuple[int, int], params:dict[str,int], ret:
         itrun (tuple[int, int]): Iteration/Run Indices - Used for debugging and return value identification
         params (dict[str, int]): Parameterisation to be explored during the run
         man (SyncManager): Multiprocessing Manager able to synchronise return Queues
+        calc (bool, optional): Calculate Results? Defaults to True.
     """    
     emailWarn(f"optimisation process {index} - {itrun}", _do_run, index, itrun, params, ret);
 

@@ -10,7 +10,6 @@ class Param(TypedDict):
     minimum:NotRequired[int];
     increment:int;
 
-
 parser:ArgumentParser = ArgumentParser( \
     prog = "optimiser.py", \
     description = "(Semi)-Automatically run iterative optimisations for Toooba - aiming for 50% of default size", \
@@ -49,6 +48,20 @@ def _get_params_obj()->dict[str,Param]:
 (lambda default: parser.add_argument("--email_json", type=str, default=default, help = f"JSON object file used to configure email notifications for iteration ends - default `{default}`")) (f"/{path.join(*(__file__.split(path.sep)[:-1]), "email.json")}");
 
 #================================================================================================================#
+# Optimiser to run
+#================================================================================================================#
+
+# All optimisers declared in `optimisers.py` - will print message to stderr if missing optimisers are found
+_optimisers:dict[str,str] = {
+    "initialValues": "Generate `benchmark_res_initial.csv` and `quartus_initial_size` for all other runs - must be run first",
+    "initialSweep": "Perform an initial sweep of parameters - determine likely candidates for decrease"
+}
+
+(lambda default: parser.add_argument("--optimiser", choices=_optimisers.keys(), default = default, help = f"Optimiser to run, call with `--list-optimisers` for details - default `{default}`") )("initialValues")
+
+parser.add_argument("--list_optimisers", "-l", action="store_true", help = "List Available Optimisers and Their Uses")
+
+#================================================================================================================#
 # Parse Arguments and setup global values
 #================================================================================================================#
 
@@ -58,3 +71,14 @@ PARAM_OBJ:dict[str,Param] = _get_params_obj();
 PARAMS:list[str] = PARAM_OBJ.keys();
 PARAM_DEFAULTS:dict[str,int] = {k:v["default"] for k, v in PARAM_OBJ.items()};
 PARAM_VALUES:dict[str,int] = {k:(v["current"] if "current" in v.keys() else v["default"]) for k, v in PARAM_OBJ.items()};
+
+# Handle --list_arguments in a similar manner to --help
+if parsed_args.list_optimisers:
+    opstrs = [];
+    for optimiser in _optimisers:
+        opstrs.append(f"""
+{optimiser}:
+{_optimisers[optimiser]}
+""")
+    print ("\n-------\n".join(opstrs))
+    exit(0);

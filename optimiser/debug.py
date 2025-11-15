@@ -2,6 +2,10 @@ from args import parsed_args
 from send_email import send_email, hostname
 from traceback import format_exc
 from types import FunctionType
+from sys import stderr
+
+def printf_err(pattern:str, *args, **kwargs):
+    print(pattern.format(*args, **kwargs), flush=True, file=stderr);
 
 def dprintf(pattern:str, *args, **kwargs):
     """
