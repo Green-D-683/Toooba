@@ -125,12 +125,20 @@ benchmarks: exe_HW_sim $(TESTS_DIR)/elf_to_hex/elf_to_hex
 	$(TESTS_DIR)/benchmarks/report_log.sh benchmark_results_$(TIMESTAMP).csv Logs/*.bin.log
 # ================================================================
 
+
+# Include Dependency mapping for bluespec compile, if not cleaning
+ifeq (,$(filter clean full_clean cleanup_failed,$(MAKECMDGOALS)))
+include .depends.mk
+endif
+
 .PHONY: clean
 clean:
-	rm -r -f  *~  Makefile_*  symbol_table.txt  build_dir/*  obj_dir Verilog_RTL/*
+	rm -rf  *~  Makefile_*  symbol_table.txt  build_dir  obj_dir Verilog_RTL .depends.mk
 
 .PHONY: full_clean
 full_clean:: clean
-	rm -r -f  $(SIM_EXE_FILE)*  *.log  *.vcd  *.hex  Logs/
+	rm -rf  $(SIM_EXE_FILE)*  *.log  *.vcd  *.hex  Logs worker* benchmark_results_* benchmark_report.tap
 
 # ================================================================
+
+include $(REPO)/builds/Resources/Include_optimiser.mk

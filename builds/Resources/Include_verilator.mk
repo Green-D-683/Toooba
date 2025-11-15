@@ -25,12 +25,6 @@ Verilog_RTL/mk%.v: Verilog_RTL $(patsubst %,build_dir/%.bo,%)
 .depends.mk: build_dir Verilog_RTL
 	@if ! bluetcl -exec makedepend -verilog -elab  $(RTL_GEN_DIRS)  $(BSC_COMPILATION_FLAGS) -p $(BSC_PATH) -o $@ $(TOPFILE); then rm -f $@ && false; fi
 
-ifeq (,$(filter clean full_clean,$(MAKECMDGOALS)))
-include .depends.mk
-endif
-
-
-
 .PHONY: compile
 compile: Verilog_RTL/mkTop_HW_Side.v
 #Verilog_RTL/mkTop_HW_Side.v:  build_dir Verilog_RTL /tmp/src_dir $(VERILOG_SUB_MODULES) ## !  build_dir/Top_HW_Side.bo build_dir Verilog_RTL

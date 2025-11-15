@@ -63,11 +63,11 @@ full_clean::
 
 ifdef BLUESPEC_VERILOG_LIB
 QUARTUS_BLUESPEC_INCLUDE = $(subst /,\/,$(BLUESPEC_VERILOG_LIB))
-else 
+else # SymLink Predefined Bluespec Library for Quartus in expected place
 QUARTUS_BLUESPEC_INCLUDE = ..\/..\/BlueSpec-Verilog
 endif
 
-setup_quartus: $(REPO)/Quartus/Toooba.qpf $(REPO)/Quartus/mkCoreW.qsf
+setup_quartus:: $(REPO)/Quartus/Toooba.qpf $(REPO)/Quartus/mkCoreW.qsf
 	cp -f $(REPO)/Quartus/Toooba.qpf $(QUARTUS_DIR)/Toooba.qpf
 	sed "s/..\/builds\/RV64ACDFIMSU_Toooba_verilator/./g" $(REPO)/Quartus/mkCoreW.qsf | sed "s/..\/BlueSpec-Verilog/$(QUARTUS_BLUESPEC_INCLUDE)/" > $(QUARTUS_DIR)/mkCoreW.qsf
 
