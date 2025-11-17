@@ -83,7 +83,7 @@ def setup_db(con:sqlite3.Connection) -> None:
         con (sqlite3.Connection): Database Connection Object - should point to new database
     """    
     cur:sqlite3.Cursor = con.cursor();
-    res:sqlite3.Cursor = cur.execute(f"CREATE TABLE {TABLE} ({SCHEMA})");
+    res:sqlite3.Cursor = cur.execute(f"CREATE TABLE IF NOT EXISTS {TABLE} ({SCHEMA})");
     res.fetchall();
 
 def connect_db() -> sqlite3.Connection:
@@ -95,11 +95,10 @@ def connect_db() -> sqlite3.Connection:
     """
     if path.exists(path.join(getcwd(), DB_FILE)):
         dprintf("DB File Exists - {}", "Loading");
-        con:sqlite3.Connection = _connect_db();
     else:
         dprintf("DB File not Found - Creating and Initialising");
-        con:sqlite3.Connection = _connect_db();
-        setup_db(con);
+    con:sqlite3.Connection = _connect_db();
+    setup_db(con);
     return con;
 
 #================================================================================================================#
