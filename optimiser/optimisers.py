@@ -105,7 +105,7 @@ from debug import printf_err
 # Get all global variable names in this file
 for objName in dir(modules[__name__]):
     # Only check exports - using "_" convention for private values
-    if objName.startswith("_"):
+    if not objName.startswith("_"):
         # Get the value associated with the variable, and restrict to checking functions only
         obj = getattr(modules[__name__], objName)
         if callable(obj):
