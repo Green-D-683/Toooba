@@ -17,5 +17,8 @@ optimiser_init: optimiser
 optimiser_init_sweep: optimiser
 	$(OPTIMISER_RUN) --optimiser initialSweep
 
+optimiser_iter: optimiser
+	$(OPTIMISER_RUN) --optimiser incrementSweep
+
 optimiser.json: $(REPO)/optimiser/param_sweep.json
 	cp $(REPO)/optimiser/param_sweep.json $@

@@ -120,6 +120,14 @@ def get_results(iteration:typing.Union[None, int] = None) -> list[dbRow]:
         ret = res.fetchall();
     return ret;
 
+def get_latest_iteration() -> int:
+    con:sqlite3.Connection;
+    with connect_db() as con:
+        cur:sqlite3.Cursor = con.cursor();
+        res:sqlite3.Cursor = cur.execute(f"SELECT max(iteration) as iteration FROM {TABLE}");
+        ret = res.fetchall();
+    return ret[0]["iteration"];
+
 #================================================================================================================#
 # Testing Function - define as needed to debug
 #================================================================================================================#
@@ -129,9 +137,7 @@ def _db_test():
     Misc Test function - change as needed
     """
     from random import randint, random
-    for i in range(5):
-        add_run(randint(0,i), "somepoint", 100*random(), 100*random(), **{param:randint(1,20) for param in PARAMS});
-
+    
     _ppOut(get_results())
     
     _ppOut(get_results(4))

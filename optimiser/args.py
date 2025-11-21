@@ -54,7 +54,8 @@ def _get_params_obj()->dict[str,Param]:
 # All optimisers declared in `optimisers.py` - will print message to stderr if missing optimisers are found
 _optimisers:dict[str,str] = {
     "initialValues": "Generate `benchmark_res_initial.csv` and `quartus_initial_size` for all other runs - must be run first",
-    "initialSweep": "Perform an initial sweep of parameters - determine likely candidates for decrease"
+    "initialSweep": "Perform an initial sweep of parameters - determine likely candidates for decrease",
+    "incrementSweep": "Perform a sweep of the parameters as an iteration on the current values"
 }
 
 (lambda default: parser.add_argument("--optimiser", choices=_optimisers.keys(), default = default, help = f"Optimiser to run, call with `--list-optimisers` for details - default `{default}`") )("initialValues")
