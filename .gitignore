@@ -38,3 +38,9 @@ optimiser_artifacts
 optimiser.json
 benchmark_res_initial.csv
 quartus_initial_size
+
+builds/*_Toooba_optimiser_*/db
+builds/*_Toooba_optimiser_*/incremental_db
+builds/*_Toooba_optimiser_*/output_files
+builds/*_Toooba_optimiser_*/mkCoreW.qsf
+builds/*_Toooba_optimiser_*/Toooba.qpf
