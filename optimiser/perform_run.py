@@ -63,7 +63,7 @@ def create_run(index: int, itrun:tuple[int, int], params:dict[str, int], man:Syn
         tuple[Process, Queue]: The Process object (not yet started), and the return Queue for the run
     """
     # Check the existence of the initial value files needed for calc - exit if not found
-    if calc and not (exists(join(getcwd(), "benchmark_res_initial.csv")) and exists(join(getcwd(), "quartus_initial_size"))):
+    if calc and not (exists(join(getcwd(), "benchmark_res_initial.csv")) and exists(join(getcwd(), "quartus_initial_size")) and exists(join(getcwd(), "quartus_map_initial_summary"))):
         printf_err("Cannot find one or more initial area/performance files - did you run `make optimiser_init`")
         exit(1)
     
@@ -245,7 +245,13 @@ def _calculate_area(adir:PathLike) -> float:
 # ! Check all Area Tools are listed as options in `args.py`
 for t in _area_tools.keys():
     if t not in args_listed_area_tools.keys():
-        printf_err(f"Area Tool `{t}(...)` has not been added to args.py _area_tools - this area tool will remain unavailable until this is done")
+        printf_err(f"Area Tool `{t}(...)` has not been added to `args.py` `_area_tools` - this area tool will remain unavailable until this is done");
+
+for t in args_listed_area_tools.keys():
+    if t not in _area_tools.keys():
+        printf_err(f"Area Tool `{t}(...)` mentioned in `args.py` `_area_tools` is not defined as an area tool in `perform_run.py`. This will crash if used");
+        if t == parsed_args.area_tool:
+            exit(1);
 
 #================================================================================================================#
 # Performing the run
