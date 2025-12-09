@@ -22,14 +22,15 @@ from os import getcwd;
 
 def initialValues() -> None:
     """
-    Generate `benchmark_res_initial.csv` and `quartus_initial_size` for all other runs - must be run first
+    Generate `benchmark_res_initial.csv`, `quartus_initial_size` and `quartus_map_initial_summary` for all other runs - must be run first
     """    
     man = Manager();
     proc, q = create_run(0, [-1, -1], {}, man, False);
     proc.run();
     assert(q.get() == "DONE")
-    copy(join(getcwd(), "optimiser_artifacts", "iteration_-1", "run_-1", "quartus_size"), join(getcwd(), "quartus_initial_size"));
-    copy(join(getcwd(), "optimiser_artifacts", "iteration_-1", "run_-1", "benchmark_results.csv"), join(getcwd(), "benchmark_res_initial.csv"));
+    copy(join(getcwd(), "optimiser_artifacts", args.parsed_args.table, "iteration_-1", "run_-1", "quartus_size"), join(getcwd(), "quartus_initial_size"));
+    copy(join(getcwd(), "optimiser_artifacts", args.parsed_args.table, "iteration_-1", "run_-1", "quartus_map_summary"), join(getcwd(), "quartus_map_initial_summary"));
+    copy(join(getcwd(), "optimiser_artifacts", args.parsed_args.table, "iteration_-1", "run_-1", "benchmark_results.csv"), join(getcwd(), "benchmark_res_initial.csv"));
 
 def _sweep(iteration:int, run_params:list[dict[str,int]], runOffset:int = 0):
     # Create Multiprocessing Manager
@@ -63,7 +64,7 @@ def initialSweep() -> None:
     param_defaults:dict[str,int] = args.PARAM_DEFAULTS;
     
     # Create Sweep Permutations
-    run_params = [];
+    run_params = [param_defaults];
     for param in args.PARAMS:
         paramO = args.PARAM_OBJ[param];
         if not (("minimum" in paramO.keys() and paramO["default"] == paramO["minimum"]) or (paramO["default"] == 1)):

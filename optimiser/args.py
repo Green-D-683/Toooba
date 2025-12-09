@@ -56,30 +56,52 @@ _optimisers:dict[str,str] = {
     "initialValues": "Generate `benchmark_res_initial.csv` and `quartus_initial_size` for all other runs - must be run first",
     "initialSweep": "Perform an initial sweep of parameters - determine likely candidates for decrease",
     "incrementSweep": "Perform a sweep of the parameters as an iteration on the current values"
-}
+};
 
-(lambda default: parser.add_argument("--optimiser", choices=_optimisers.keys(), default = default, help = f"Optimiser to run, call with `--list-optimisers` for details - default `{default}`") )("initialValues")
+(lambda default: parser.add_argument("--optimiser", choices=_optimisers.keys(), default = default, help = f"Optimiser to run, call with `--list_optimisers` for details - default `{default}`") )("initialValues");
 
-parser.add_argument("--list_optimisers", "-l", action="store_true", help = "List Available Optimisers and Their Uses")
+parser.add_argument("--list_optimisers", "--lo", action="store_true", help = "List Available Optimisers and Their Uses");
+
+#================================================================================================================#
+# Optimiser Options
+#================================================================================================================#
+
+_area_tools:dict[str, str] = {
+    "quartus_size": "Parse `stdout` of Quartus to determine number of logic cells/RAM segments used - note this cannot determine proportions of sizes of RAM segments",
+    "quartus_map_summary": "Parse `mkCoreW.map.summary` of quartus output files for number of combinatorial functions and Memory bits used"
+};
+
+(lambda default: parser.add_argument("--area_tool", choices=_area_tools.keys(), default = default, help = f"Tooling to use for determining Core Area, call with `--list_area_tools` for details - default `{default}`"))("quartus_map_summary");
+
+parser.add_argument("--list_area_tools", "--la", action="store_true", help="List Available Area Toolings");
 
 #================================================================================================================#
 # Parse Arguments and setup global values
 #================================================================================================================#
 
-parsed_args:Namespace = parser.parse_args()
+parsed_args:Namespace = parser.parse_args();
 
 PARAM_OBJ:dict[str,Param] = _get_params_obj();
 PARAMS:list[str] = PARAM_OBJ.keys();
 PARAM_DEFAULTS:dict[str,int] = {k:v["default"] for k, v in PARAM_OBJ.items()};
 PARAM_VALUES:dict[str,int] = {k:(v["current"] if "current" in v.keys() else v["default"]) for k, v in PARAM_OBJ.items()};
 
-# Handle --list_arguments in a similar manner to --help
+def _list_options(name:str, d:dict):
+    print (f"\n{name}:\n");
+    strs = [];
+    for k in d:
+        strs.append(f"\t{k}:\n\t\t{d[k]}");
+    print ("\n\t-------\n".join(strs));
+    print ("\n");
+
+_end = False;
+# Handle --list_{X} in a similar manner to --help
 if parsed_args.list_optimisers:
-    opstrs = [];
-    for optimiser in _optimisers:
-        opstrs.append(f"""
-{optimiser}:
-{_optimisers[optimiser]}
-""")
-    print ("\n-------\n".join(opstrs))
+    _list_options("Optimisers", _optimisers);
+    _end = True;
+if parsed_args.list_area_tools:
+    _list_options("Area Toolings", _area_tools);
+    _end = True;
+
+if _end:
     exit(0);

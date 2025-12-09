@@ -32,6 +32,9 @@ class RunRetObj(TypedDict):
 # debug printing
 from debug import dprintf, emailWarn, printf_err;
 
+# Area Tooling Option
+from args import parsed_args, _area_tools as args_listed_area_tools
+
 #================================================================================================================#
 # Global Definitions - known at start-time
 #================================================================================================================#
@@ -145,9 +148,9 @@ def _calculate_perf(perfPath:PathLike) -> float:
                 perfs.append(int(initRow["Cycles"]) / int(row["Cycles"]));
     return sum(perfs) / len(perfs);
 
-def _calculate_area(areaPath:PathLike) -> float:
+def _calculate_area_q1(areaPath:PathLike) -> float:
     """
-    Calculate the relative area to base Toooba of the Parameterisation
+    Calculate the relative area to base Toooba of the Parameterisation, using parsed `stdout` of Quartus
 
     Args:
         areaPath (PathLike): Absolute Path to the area output file
@@ -183,6 +186,67 @@ def _calculate_area(areaPath:PathLike) -> float:
 
     return 0.5 * (logic_cells / initial_logic_cells) + 0.5 * (ram_segments / initial_ram_segments);
 
+def _calculate_area_q2(areaPath:PathLike) -> float:
+    """
+    Calculate the relative area to base Toooba of the Parameterisation, using parsed `mkCoreW.map.summary` of Quartus
+
+    Args:
+        areaPath (PathLike): Absolute Path to the area output file
+
+    Returns:
+        float: Ratio of the Parameterisation's Area to Base Toooba
+    """    
+    with open(areaPath, "r") as area_file:
+        areaLines = area_file.readlines();
+
+    with open("quartus_map_initial_summary", "r") as initial_area_file:
+        initialAreaLines = initial_area_file.readlines();
+
+    comb_function_pattern = compile(r"Total combinational functions : (\d{1,3}(?:,\d{3})*)$");
+    mem_bit_pattern = compile(r"Total memory bits : (\d{1,3}(?:,\d{3})*)$");
+
+    for line in areaLines:
+        logic_match = comb_function_pattern.search(line);
+        if logic_match:
+            logic_cells = int((logic_match.group(1)).replace(",", "")); # Remove Commas from regex output
+        ram_match = mem_bit_pattern.search(line);
+        if ram_match:
+            ram_segments = int(ram_match.group(1).replace(",", ""));
+
+    for line in initialAreaLines:
+        logic_match = comb_function_pattern.search(line);
+        if logic_match:
+            initial_logic_cells = int(logic_match.group(1).replace(",", ""));
+        ram_match = mem_bit_pattern.search(line);
+        if ram_match:
+            initial_ram_segments = int(ram_match.group(1).replace(",", ""));
+
+    return 0.5 * (logic_cells / initial_logic_cells) + 0.5 * (ram_segments / initial_ram_segments);
+
+_area_tools = {
+    "quartus_size": _calculate_area_q1,
+    "quartus_map_summary": _calculate_area_q2
+};
+
+def _calculate_area(adir:PathLike) -> float:
+    """
+    Calculate the relative area to base Toooba of the Parameterisation, using the tool specified by the `--area_tool` command-line argument
+
+    Args:
+        adir (PathLike): Artifact Directory of the run
+
+    Returns:
+        float: Ratio of the Parameterisation's Area to Base Toooba
+    """    
+    tool = parsed_args.area_tool;
+    func = _area_tools[tool];
+    return func(f"{adir}/{tool}");
+
+# ! Check all Area Tools are listed as options in `args.py`
+for t in _area_tools.keys():
+    if t not in args_listed_area_tools.keys():
+        printf_err(f"Area Tool `{t}(...)` has not been added to args.py _area_tools - this area tool will remain unavailable until this is done")
+
 #================================================================================================================#
 # Performing the run
 #================================================================================================================#
@@ -204,7 +268,7 @@ def _do_run(index:int, itrun:tuple[int, int], params:dict[str,int], ret:Queue, c
     # Setting up Directories
     proc_dir = master_dir.replace("verilator", (f"optimiser_{index}"));
     _setup_build_dir(proc_dir);
-    log_dir = join(master_dir, "optimiser_artifacts", f"iteration_{itrun[0]}", f"run_{itrun[1]}");
+    log_dir = join(master_dir, "optimiser_artifacts", parsed_args.table, f"iteration_{itrun[0]}", f"run_{itrun[1]}");
     _setup_log_dir(log_dir);
     
     # Define Parameters for Make - these are passed into bsv as compliation flags
@@ -230,8 +294,9 @@ def _do_run(index:int, itrun:tuple[int, int], params:dict[str,int], ret:Queue, c
 
     # `make quartus`
     _make_call_log(log_dir, "quartus")
-    # Copy Quartus Area Report
+    # Copy Quartus Area Report(s)
     copy(f"{proc_dir}/quartus_artifacts/quartus_size", f"{log_dir}/quartus_size");
+    copy(f"{proc_dir}/output_files/mkCoreW.map.summary", f"{log_dir}/quartus_map_summary");
 
     # Cleanup Build Dir
     chdir(master_dir);
@@ -240,7 +305,7 @@ def _do_run(index:int, itrun:tuple[int, int], params:dict[str,int], ret:Queue, c
     if calc:
         # Calculate Performance and Area from Artifacts
         performance:float = _calculate_perf(f"{log_dir}/benchmark_results.csv");
-        area:float = _calculate_area(f"{log_dir}/quartus_size");
+        area:float = _calculate_area(f"{log_dir}");
 
         # Build and Enqueue Return Object
         ret.put(RunRetObj(index = index, params = params, performance = performance, area = area));
