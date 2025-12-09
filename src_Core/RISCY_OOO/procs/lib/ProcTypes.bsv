@@ -87,6 +87,8 @@ typedef `DRAM_LATENCY DramLatency;
 
 typedef Bit#(`LOG_DEADLOCK_CYCLES) DeadlockTimer;
 
+typedef `TOUR_PRED_SIZE TourPredSize;
+
 typedef struct {
     // ISA modes
     Bool s;

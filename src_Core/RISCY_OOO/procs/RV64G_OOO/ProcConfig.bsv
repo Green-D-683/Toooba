@@ -88,6 +88,11 @@
 `define LOG_DRAM_REGION_SIZE 25 // 32MB for each DRAM region
 `endif
 
+// Parameterise out Tournement Predictor Size
+`ifndef TOUR_PRED_SIZE
+`define TOUR_PRED_SIZE 10
+`endif
+
 //
 // ==== CACHE SIZE ====
 //
