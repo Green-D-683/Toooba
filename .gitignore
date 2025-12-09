@@ -38,6 +38,7 @@ optimiser_artifacts
 optimiser.json
 benchmark_res_initial.csv
 quartus_initial_size
+quartus_map_initial_summary
 
 builds/*_Toooba_optimiser_*/db
 builds/*_Toooba_optimiser_*/incremental_db
