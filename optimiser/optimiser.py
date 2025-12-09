@@ -5,6 +5,7 @@
 #================================================================================================================#
 
 from debug import emailWarn;
+from send_email import send_email, hostname
 
 import optimisers
 from args import parsed_args
@@ -20,6 +21,7 @@ def main() -> None:
     Main Optimiser - this runs within a crash warning handler that will email in the case of a failure - declare the main program here rather than outside
     """
     getattr(optimisers, parsed_args.optimiser)();
+    send_email("`optimiser.py` SUCCESS", f"`optimiser.py` completed successfully on {hostname()}");
 
 #================================================================================================================#
 # Call Site for `main()` - Crash Handler `emailWarn`

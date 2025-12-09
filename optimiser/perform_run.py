@@ -76,7 +76,7 @@ def _mkdirIfNotExists(dir:PathLike) -> None:
     Make a Directory at a given location if it doesn't exist, including parents, equivalent to `mkdir -p $dir`
 
     Args:
-        dir (PathLike): _description_
+        dir (PathLike): absolute path to the directory
     """    
     if not exists(dir):
         mkdir(dir);
