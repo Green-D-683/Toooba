@@ -106,7 +106,10 @@ core_parameters = \
 	SB_SIZE \
 	RS_ALU_SIZE \
 	RS_MEM_SIZE \
-	RS_FPUMULDIV_SIZE
+	RS_FPUMULDIV_SIZE \
+	TOUR_PRED_SIZE \
+	BTB_SIZE \
+	BTB_WAYS
 BSC_COMPILATION_FLAGS += $(foreach parameter,$(core_parameters),-D $(parameter)=$($(parameter)))
 endif
 
