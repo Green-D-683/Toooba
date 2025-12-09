@@ -93,6 +93,15 @@
 `define TOUR_PRED_SIZE 10
 `endif
 
+// Parameterise BTB
+`ifndef BTB_SIZE
+`define BTB_SIZE 10
+`endif
+
+`ifndef BTB_WAYS
+`define BTB_WAYS 2
+`endif
+
 //
 // ==== CACHE SIZE ====
 //

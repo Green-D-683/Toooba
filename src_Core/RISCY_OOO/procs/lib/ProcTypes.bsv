@@ -89,6 +89,9 @@ typedef Bit#(`LOG_DEADLOCK_CYCLES) DeadlockTimer;
 
 typedef `TOUR_PRED_SIZE TourPredSize;
 
+typedef `BTB_SIZE BtbSize;
+typedef `BTB_WAYS BtbAssoc;
+
 typedef struct {
     // ISA modes
     Bool s;
