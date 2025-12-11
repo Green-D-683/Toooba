@@ -20,7 +20,6 @@ usage_line = (
     "      Specifies the number of parallel processes used\n"
     "        (creates temporary separate working directories worker_0, worker_1, ...)\n"
     "      By default uses the number of CPUs listed in /proc/cpuinfo - 4.\n"
-    "      In any case, limits it to 8.\n"
     "\n"
     " If <opt timeout_secs> is given, it must be an integer and must follow an explicit <opt parallelism>\n"
     "      Specifies the number of seconds to wait for each command run.\n"
@@ -48,8 +47,6 @@ import multiprocessing
 # DEBUGGING ONLY: This exclude list allows skipping some specific test
 
 exclude_list = []
-
-n_workers_max = 13
 
 timeout = 6000
 
@@ -117,7 +114,7 @@ def main (argv = None):
         j = 6
     else:
         n_workers = multiprocessing.cpu_count () - 4
-    n_workers = max(min (n_workers_max, n_workers), 1)
+    n_workers = max(n_workers, 1)
     sys.stdout.write ("Using {0} worker processes\n".format (n_workers))
 
     global timeout
@@ -170,6 +167,8 @@ def main (argv = None):
         return 0
     args_dict ['filenames'] = filenames
     args_dict ['n_tests']   = n_tests
+
+    n_workers = min(n_tests, n_workers)
 
     # Create a shared counter to index into the list of filenames
     index = multiprocessing.Value ('L', 0)    # Unsigned long (4 bytes)
