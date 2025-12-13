@@ -43,6 +43,8 @@ TEST ?= rv64ui-p-add
 
 BSC_COMPILATION_FLAGS += -D BSIM
 
+override BENCHMARK_ARGS += --no_write_logs
+
 
 -include ./Include_Generated_Params.mk
 
