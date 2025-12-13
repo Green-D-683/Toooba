@@ -120,9 +120,9 @@ TIMESTAMP ?= $(shell date +%Y-%m-%d_%H-%M-%S)
 .PHONY: benchmarks
 benchmarks: exe_HW_sim $(TESTS_DIR)/elf_to_hex/elf_to_hex
 	@echo "Running benchmarks; saving logs in Logs/"
-	$(TESTS_DIR)/Run_benchmarks.py $(BENCHMARK_ARGS) ./exe_HW_sim  $(REPO)  ./Logs
+	$(TESTS_DIR)/Run_benchmarks.py $(BENCHMARK_ARGS) ./exe_HW_sim  $(REPO)  ./Logs benchmark_results_$(TIMESTAMP).csv
 	@echo "Finished running benchmarks"
-	$(TESTS_DIR)/benchmarks/report_log.sh benchmark_results_$(TIMESTAMP).csv Logs/*.bin.log
+	@column -s, -t < benchmark_results_$(TIMESTAMP).csv
 # ================================================================
 
 
