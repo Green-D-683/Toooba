@@ -3,124 +3,91 @@
 # Copyright (c) 2018-2019 Bluespec, Inc.
 # See LICENSE for license details
 
-usage_line = (
-    "  Usage:\n"
-    "    $ <this_prog>    <simulation_executable>  <repo_dir>  <logs_dir> <opt verbosity>  <opt parallelism> <opt timeout_secs>\n"
-    "\n"
-    "  Runs the RISC-V <simulation_executable>\n"
-    "  on ISA tests: ELF files taken from <repo-dir>/isa and its sub-directories.\n"
-    "\n"
-    "  For each ELF file FOO, saves simulation output in <logs_dir>/FOO.log. \n"
-    "\n"
-    "  If <opt verbosity> is given, it must be one of the following:\n"
-    "      v1:    Print instruction trace during simulation\n"
-    "      v2:    Print pipeline stage state during simulation\n"
-    "\n"
-    "  If <opt parallelism> is given, it must be an integer\n"
-    "      Specifies the number of parallel processes used\n"
-    "        (creates temporary separate working directories worker_0, worker_1, ...)\n"
-    "      By default uses the number of CPUs listed in /proc/cpuinfo - 4.\n"
-    "\n"
-    " If <opt timeout_secs> is given, it must be an integer and must follow an explicit <opt parallelism>\n"
-    "      Specifies the number of seconds to wait for each command run.\n"
-    "      Defaults to 60s\n."
-    "\n"
-    "  Example:\n"
-    "      $ <this_prog>  .exe_HW_sim  ~somebody/GitHub/Toooba ./Logs v1 4\n"
-    "    will run the verilator simulation executable on the following RISC-V ISA tests:\n"
-    "            ~somebody/GitHub/Tests/benchmarks/*.bin\n"
-    "    and will leave a transcript of each test's simulation output in files like\n"
-    "            ./Logs/rv32ui-p-add.log\n"
-    "    Each log will contain an instruction trace (because of the 'v1' arg).\n"
-    "    It will use 4 processes in parallel to run the regressions.\n"
-    "        (creating temporary working directories worker_0, ..., worker_4)\n"
+from os import PathLike
+import multiprocessing
+from argparse import ArgumentParser, RawDescriptionHelpFormatter
+
+parser = ArgumentParser(\
+    prog = "Run_benchmarks.py", \
+    description = """Runs a RISC-V simulation executable on Benchmark tests: 
+ELF files taken from <repo-dir>/Tests/benchmarks and its sub-directories.
+
+Example:
+      `$ <this_prog>  .exe_HW_sim  ~somebody/GitHub/Toooba ./Logs -v -p 4`
+    will run the verilator simulation executable on the following RISC-V ISA tests:
+            ~somebody/GitHub/Toooba/Tests/benchmarks/*.bin
+    and will leave a transcript of each test's simulation output in files like
+            ./Logs/rv32ui-p-add.log
+    Each log will contain an instruction trace (because of the '-v' arg).
+    It will use 4 processes in parallel to run the regressions.
+    (creating temporary working directories worker_0, ..., worker_3)""", \
+    epilog = "For more details, see $(REPO)/Tests/Run_benchmarks.py", \
+    add_help = True, \
+    formatter_class=RawDescriptionHelpFormatter
 )
+
+parser.add_argument("sim_path", type=str, help="Run this simulation executable on the Benchmark tests - Required")
+parser.add_argument("repo", type=str, help="Root Directory of the Toooba Repository - used to locate the Benchmarks - Required")
+parser.add_argument("logs_path", type=str, help="For each ELF file FOO, saves simulation output in `<logs_path>/FOO.log` - Required")
+parser.add_argument("--verbose", "-v", action="count", default=0, help="Print additional information during simulation: `-v` = instruction trace; `-vv` = pipeline stage state")
+parser.add_argument("--parallelism", "-p", type=int, default=multiprocessing.cpu_count ()-4 ,help="Specifies the number of parallel processes used (creates temporary separate working directories worker_0, worker_1, ...). By default uses the number of CPUs listed in `/proc/cpuinfo - 4`.")
+parser.add_argument("--timeout_secs", type=int, default=6000, help="Specifies the number of seconds to wait for each command run. Defaults to 6000s")
+
+args = parser.parse_args()
 
 import sys
 import os
 import stat
 import subprocess
 
-import multiprocessing
 
 # ================================================================
 # DEBUGGING ONLY: This exclude list allows skipping some specific test
 
 exclude_list = []
 
-timeout = 6000
+def error(line:str):
+    sys.stderr.write(line)
+    parser.print_usage(file=sys.stderr)
+    sys.exit(1)
 
-def print_hello ():
-    print ("hello")
 # ================================================================
 
+timeout = args.timeout_secs
+
 def main (argv = None):
-    print ("Use flag --help  or --h for a help message")
-    if ((len (argv) <= 1) or
-        (argv [1] == '-h') or (argv [1] == '--help') or
-        (len (argv) < 4)):
-
-        sys.stdout.write (usage_line)
-        sys.stdout.write ("\n")
-        return 0
-
+    args_dict = {}
     # Simulation executable
-    if not (os.path.exists (argv [1])):
-        sys.stderr.write ("ERROR: The given simulation path does not seem to exist?\n")
-        sys.stderr.write ("    Simulation path: " + sim_path + "\n")
-        sys.exit (1)
-    args_dict = {'sim_path': os.path.abspath (os.path.normpath (argv [1]))}
+    sim_path = args.sim_path
+    if not (os.path.exists (sim_path)):
+        error(f"ERROR: The given simulation path does not seem to exist?\n    Simulation path: {sim_path}\n")
+    args_dict['sim_path'] = os.path.abspath (os.path.normpath (sim_path))
 
     # Repo in which to find ELFs and elf_to_hex executable
-    if (not os.path.exists (argv [2])):
-        sys.stderr.write ("ERROR: repo directory ({0}) does not exist?\n".format (argv [2]))
-        sys.stdout.write ("\n")
-        sys.stdout.write (usage_line)
-        sys.stdout.write ("\n")
-        return 1
-    repo = os.path.abspath (os.path.normpath (argv [2]))
-
+    repo = os.path.abspath (os.path.normpath (args.repo))
+    if (not os.path.exists (repo)):
+        error(f"ERROR: repo directory ({repo}) does not exist?\n")
+    
     elfs_path = os.path.join (repo, "Tests", "benchmarks")
     if (not os.path.exists (elfs_path)):
-        sys.stderr.write ("ERROR: BINs directory ({0}) does not exist?\n".format (elfs_path))
-        sys.stdout.write ("\n")
-        sys.stdout.write (usage_line)
-        sys.stdout.write ("\n")
-        return 1
+        error(f"ERROR: BINs directory ({elfs_path}) does not exist?\n")
     args_dict ['elfs_path'] = elfs_path
 
     # Logs directory
-    logs_path = os.path.abspath (os.path.normpath (argv [3]))
+    logs_path = os.path.abspath (os.path.normpath (args.logs_path))
     if not (os.path.exists (logs_path) and os.path.isdir (logs_path)):
         print ("Creating dir: " + logs_path)
         os.mkdir (logs_path)
     args_dict ['logs_path'] = logs_path
 
-    # Optional verbosity
-    verbosity = 0
-    j = 4
-    if len (argv) >= 5:
-        if argv [4] == "v1":
-            verbosity = 1
-            j = 5
-        elif argv [4] == "v2":
-            verbosity = 2
-            j = 5
-    args_dict ['verbosity'] = verbosity
 
-    # Optional parallelism; limit it to 8
-    if len (argv [j:]) != 0 and isdecimal (argv [j]):
-        n_workers = int (argv [j])
-        j = 6
-    else:
-        n_workers = multiprocessing.cpu_count () - 4
-    n_workers = max(n_workers, 1)
+    args_dict ['verbosity'] = args.verbose
+
+    # Optional parallelism
+    n_workers = min(max(args.parallelism, 1), multiprocessing.cpu_count())
     sys.stdout.write ("Using {0} worker processes\n".format (n_workers))
 
     global timeout
-    if len(argv[j:]) != 0 and isdecimal (argv[j]):
-        timeout = int(argv[j])
-        j = 7
     sys.stdout.write (f"Using {timeout}s timeout\n")
 
     # End of command-line arg processing
@@ -129,12 +96,7 @@ def main (argv = None):
     # elf_to_hex executable
     elf_to_hex_exe = os.path.join (repo, "Tests", "elf_to_hex", "elf_to_hex")
     if (not os.path.exists (elf_to_hex_exe)):
-        sys.stderr.write ("ERROR: elf_to_hex executable does not exist?\n")
-        sys.stderr.write ("    at {0}\n".format (elf_to_hex_exe))
-        sys.stdout.write ("\n")
-        sys.stdout.write (usage_line)
-        sys.stdout.write ("\n")
-        return 1
+        error(f"ERROR: elf_to_hex executable does not exist?\n    at {elf_to_hex_exe}\n")
     args_dict ['elf_to_hex_exe'] = elf_to_hex_exe
 
     sys.stdout.write ("Parameters:\n")
@@ -364,7 +326,7 @@ def run_command (command, log_fd):
             # Python 3.6 and later
             result = subprocess.run (args = command,
                                     bufsize = 0,
-                                    stdout = subprocess.PIPE,
+                                    stdout = subprocess.PIPE, # Can this be piped into tail? In real-time? Or just do instret capture of 
                                     stderr = subprocess.STDOUT,
                                     encoding='utf-8',
                                     timeout=timeout)
