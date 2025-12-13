@@ -110,7 +110,7 @@ TIMESTAMP := $(shell date +%Y-%m-%d_%H-%M-%S)
 .PHONY: benchmarks 
 benchmarks:
 	@echo "Running benchmarks; saving logs in Logs/"
-	$(REPO)/Tests/Run_benchmarks.py  ./exe_HW_sim  $(REPO)  ./Logs
+	$(TESTS_DIR)/Run_benchmarks.py $(BENCHMARK_ARGS) ./exe_HW_sim  $(REPO)  ./Logs
 	@echo "Finished running benchmarks"
 	$(REPO)/Tests/benchmarks/report_log.sh benchmark_results_$(TIMESTAMP).csv Logs/*.bin.log
 # ================================================================
