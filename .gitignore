@@ -45,3 +45,7 @@ builds/*_Toooba_optimiser_*/incremental_db
 builds/*_Toooba_optimiser_*/output_files
 builds/*_Toooba_optimiser_*/mkCoreW.qsf
 builds/*_Toooba_optimiser_*/Toooba.qpf
+
+builds/blues/*
+!builds/blues/Makefile
+!builds/blues/blues_target_default.mk
