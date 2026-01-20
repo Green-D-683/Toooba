@@ -17,7 +17,7 @@ build_dir:
 
 build_dir/%.bo: build_dir $(filter %/$(patsubst build_dir/%.bo,%.bsv,$@),$(BSC_DEPS)) 
 	$(info building $@)
-	bsc -elab -sim  $(TMP_DIRS)  $(RTL_GEN_DIRS)  $(BSC_COMPILATION_FLAGS)  -p $(BSC_PATH) $<
+	bsc -elab -sim  $(TMP_DIRS)  $(RTL_GEN_DIRS)  $(BSC_COMPILATION_FLAGS)  -p $(BSC_PATH) $(filter %/$(patsubst build_dir/%.bo,%.bsv,$@),$(BSC_DEPS)) 
 
 .PHONY: compile
 compile: build_dir build_dir/Top_HW_Side.bo
