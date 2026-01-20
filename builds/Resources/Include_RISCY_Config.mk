@@ -137,6 +137,23 @@ BSC_COMPILATION_FLAGS += \
 	-D DATA_PREFETCHER_IN_$(DATA_PREFETCHER_LOCATION) \
 	-D DATA_PREFETCHER_$(DATA_PREFETCHER_TYPE)
 
+ifndef SUPERSCALAR
+	ifndef IN_ORDER
+		# Default to Superscalar Core
+		define SUPERSCALAR 
+endef
+		BSC_COMPILATION_FLAGS += -D SUPERSCALAR
+	else
+		BSC_COMPILATION_FLAGS += -D IN_ORDER
+	endif
+else
+	ifdef IN_ORDER
+		$(error Cannot be both In-Order and Superscalar)
+	else 
+		BSC_COMPILATION_FLAGS += -D SUPERSCALAR
+	endif
+endif
+
 # TODO:
 #    -D SELF_INV_CACHE -D L1D_MAX_HITS=$(SELF_INV_CACHE)
 #    -D SYSTEM_SELF_INV_L1D
