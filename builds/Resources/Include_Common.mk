@@ -99,7 +99,7 @@ $(TESTS_DIR)/elf_to_hex/elf_to_hex:
 exe_HW_sim: simulator
 
 .PHONY: test
-test: $(TESTS_DIR)/elf_to_hex/elf_to_hex
+test: exe_HW_sim $(TESTS_DIR)/elf_to_hex/elf_to_hex
 	$(TESTS_DIR)/elf_to_hex/elf_to_hex  $(TESTS_DIR)/isa/$(TEST)  Mem.hex
 	./exe_HW_sim  $(VERBOSITY)  +tohost
 

@@ -28,7 +28,7 @@ Verilog_RTL/mk%.v: Verilog_RTL $(patsubst %,build_dir/%.bo,%)
 .PHONY: compile
 compile: Verilog_RTL/mkTop_HW_Side.v
 #Verilog_RTL/mkTop_HW_Side.v:  build_dir Verilog_RTL /tmp/src_dir $(VERILOG_SUB_MODULES) ## !  build_dir/Top_HW_Side.bo build_dir Verilog_RTL
-Verilog_RTL/mkTop_HW_Side.v: $(TOPFILE)
+Verilog_RTL/mkTop_HW_Side.v: $(TOPFILE) build_dir/Top_HW_Side.bo
 	@echo  "INFO: Verilog RTL generation ..."
 	bsc -u -verilog  $(RTL_GEN_DIRS)  $(BSC_COMPILATION_FLAGS) -p $(BSC_PATH) $<
 	@echo  "INFO: Verilog RTL generation finished"
