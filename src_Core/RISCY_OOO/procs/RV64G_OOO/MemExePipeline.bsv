@@ -36,6 +36,9 @@ import Exec::*;
 import Performance::*;
 import ReservationStationEhr::*;
 import ReservationStationMem::*;
+`ifdef IN_ORDER
+import InOrderPipeline::*;
+`endif
 import ReorderBuffer::*;
 import TlbTypes::*;
 import DTlb::*;
@@ -149,7 +152,14 @@ endmodule
 
 interface MemExeInput;
     // conservative scoreboard check in reg read stage
+`ifdef SUPERSCALAR
     method RegsReady sbCons_lazyLookup(PhyRegs r);
+`else // IN_ORDER
+    method RegsReady sb_lookup(PhyRegs r);
+
+    // IN-ORDER Decode Output
+    interface InOrderPipeline pipeIfc;
+`endif
     // Phys reg file
     method Data rf_rd1(PhyRIndx rindx);
     method Data rf_rd2(PhyRIndx rindx);
@@ -165,6 +175,9 @@ interface MemExeInput;
     method Action rob_setExecuted_doFinishMem_RegData (InstTag t, Data dst_data);
 `endif
     method Action rob_setExecuted_deqLSQ(InstTag t, Maybe#(Exception) cause, Maybe#(LdKilledBy) ld_killed);
+`ifdef IN_ORDER
+    method Action rob_setLSQTag(InstTag x, LdStQTag t, Bool isFence);
+`endif
     // MMIO
     method Bool isMMIOAddr(Addr a);
     method Action mmioReq(MMIOCRq r);
@@ -172,9 +185,11 @@ interface MemExeInput;
     method Action mmioRespDeq;
 
     // global broadcast methods
+`ifdef SUPERSCALAR
     // set aggressive sb & wake up RS
     method Action setRegReadyAggr_mem(PhyRIndx dst);
     method Action setRegReadyAggr_forward(PhyRIndx dst);
+`endif
     // write reg file & set conservative sb
     method Action writeRegFile(PhyRIndx dst, Data data);
 
@@ -185,7 +200,9 @@ endinterface
 interface MemExePipeline;
     // recv bypass from exe and finish stages of each ALU pipeline
     interface Vector#(TMul#(2, AluExeNum), RecvBypass) recvBypass;
+`ifdef SUPERSCALAR
     interface ReservationStationMem rsMemIfc;
+`endif
     interface DTlbSynth dTlbIfc;
     interface SplitLSQ lsqIfc;
     interface StoreBuffer stbIfc;
@@ -241,8 +258,12 @@ module mkMemExePipeline#(MemExeInput inIfc)(MemExePipeline);
     Array #(Reg #(EventsCoreMem)) events_reg <- mkDRegOR (5, unpack (0));
 `endif
 
+`ifdef SUPERSCALAR
     // reservation station
     ReservationStationMem rsMem <- mkReservationStationMem;
+`else // IN_ORDER
+    InOrderPipeline pipe = inIfc.pipeIfc;
+`endif
 
     // pipeline fifos
     let dispToRegQ <- mkMemDispToRegFifo;
@@ -294,9 +315,11 @@ module mkMemExePipeline#(MemExeInput inIfc)(MemExePipeline);
             // early wake up RS and set SB
             // this is done only when the resp is not wrong path
             LSQHitInfo info <- lsq.getHit(Ld (tag));
+`ifdef SUPERSCALAR
             if(info.dst matches tagged Valid .dst &&& !info.waitWPResp) begin
                 inIfc.setRegReadyAggr_mem(dst.indx);
             end
+`endif
             if(verbose) begin
                 $display("[Ld resp] ", fshow(id), "; ", fshow(d), "; ", fshow(info));
             end
@@ -396,24 +419,43 @@ module mkMemExePipeline#(MemExeInput inIfc)(MemExePipeline);
     // Reservation Station Stuff
     //=======================================================
 
+    
+`ifdef SUPERSCALAR
     rule doDispatchMem;
         rsMem.doDispatch;
         let x = rsMem.dispatchData;
+        let ldstqtag = x.data.ldstq_tag;
+        let mem_func = x.data.mem_func;
+`else // IN_ORDER
+    rule doDispatchMem (pipe.first.data matches tagged MemExe .x);
+        /*
+            Look at front of In-Order Pipeline, and dequeue if item is tagged as Mem instruction. The In-Order Core also allocates the LSQ at this stage.
+        */
+        let ldstqtagMaybe = getLsqTag(lsq, x.data.mem_inst.mem_func);
+        when(isValid(ldstqtagMaybe), noAction); // stall if LQ/SQ is full
+        let ldstqtag = validValue(ldstqtagMaybe);
+        enqToLSQ(lsq, x.tag, x.data.mem_inst, x.regs.dst, x.spec_bits, hash(x.data.pc));
+
+        let isFence = False;
+        inIfc.rob_setLSQTag(x.tag, ldstqtag, isFence);
+
+        let mem_func = x.data.mem_inst.mem_func;
+`endif
         if(verbose) $display("[doDispatchMem] ", fshow(x));
 
         // check store not having dst reg: this is for setting store to be
         // executed after address transation
-        doAssert(!(x.data.mem_func == St && isValid(x.regs.dst)),
+        doAssert(!(mem_func == St && isValid(x.regs.dst)),
                  "St cannot have dst reg");
 
         // go to next stage
         dispToRegQ.enq(ToSpecFifo {
             data: MemDispatchToRegRead {
-                mem_func: x.data.mem_func,
+                mem_func: mem_func,
                 imm: x.data.imm,
                 regs: x.regs,
                 tag: x.tag,
-                ldstq_tag: x.data.ldstq_tag
+                ldstq_tag: ldstqtag
             },
             spec_bits: x.spec_bits
         });
@@ -424,6 +466,10 @@ module mkMemExePipeline#(MemExeInput inIfc)(MemExePipeline);
             ldToUseLatTimer.start(idx);
         end
 `endif
+`ifdef IN_ORDER
+        // Pipe Proceeds to next element
+        pipe.deq;
+`endif
     endrule
 
     rule doRegReadMem;
@@ -433,7 +479,11 @@ module mkMemExePipeline#(MemExeInput inIfc)(MemExePipeline);
         if(verbose) $display("[doRegReadMem] ", fshow(dispToReg));
 
         // check conservative scoreboard
+`ifdef SUPERSCALAR
         let regsReady = inIfc.sbCons_lazyLookup(x.regs);
+`else // IN_ORDER
+        let regsReady = inIfc.sb_lookup(x.regs);
+`endif
 
         // get rVal1 (check bypass)
         Data rVal1 = ?;
@@ -466,6 +516,8 @@ module mkMemExePipeline#(MemExeInput inIfc)(MemExePipeline);
         let regToExe = regToExeQ.first;
         let x = regToExe.data;
         if(verbose) $display("[doExeMem] ", fshow(regToExe));
+
+        // TODO LSQ Enq
 
         // get virtual addr & St/Sc/Amo data
         Addr vaddr = x.rVal1 + signExtend(x.imm);
@@ -627,9 +679,11 @@ module mkMemExePipeline#(MemExeInput inIfc)(MemExePipeline);
         if(issRes matches tagged Forward .forward) begin
             forwardQ.enq(tuple2(info.tag, forward.data));
             // early wake up
+`ifdef SUPERSCALAR
             if(forward.dst matches tagged Valid .dst) begin
                 inIfc.setRegReadyAggr_forward(dst.indx);
             end
+`endif
 `ifdef PERF_COUNT
             // perf: load forward
             if(inIfc.doStats) begin
@@ -837,7 +891,9 @@ module mkMemExePipeline#(MemExeInput inIfc)(MemExePipeline);
         // write reg file & set ROB as Executed & wakeup rs
         if(lsqDeqLd.dst matches tagged Valid .dst) begin
             inIfc.writeRegFile(dst.indx, resp);
+`ifdef SUPERSCALAR
             inIfc.setRegReadyAggr_mem(dst.indx);
+`endif
 `ifdef INCLUDE_TANDEM_VERIF
 	    inIfc.rob_setExecuted_doFinishMem_RegData (lsqDeqLd.instTag, resp);
 `endif
@@ -915,7 +971,9 @@ module mkMemExePipeline#(MemExeInput inIfc)(MemExePipeline);
         // write reg file & wakeup rs (this wakeup is late but MMIO is rare) & set ROB as Executed
         if(lsqDeqLd.dst matches tagged Valid .dst) begin
             inIfc.writeRegFile(dst.indx, resp);
+`ifdef SUPERSCALAR
             inIfc.setRegReadyAggr_mem(dst.indx);
+`endif
 `ifdef INCLUDE_TANDEM_VERIF
 	    inIfc.rob_setExecuted_doFinishMem_RegData (lsqDeqLd.instTag, resp);
 `endif
@@ -1135,7 +1193,9 @@ module mkMemExePipeline#(MemExeInput inIfc)(MemExePipeline);
         // write reg file & set ROB as Executed & wake up rs
         if(lsqDeqSt.dst matches tagged Valid .dst) begin
             inIfc.writeRegFile(dst.indx, resp);
+`ifdef SUPERSCALAR
             inIfc.setRegReadyAggr_mem(dst.indx);
+`endif
 `ifdef INCLUDE_TANDEM_VERIF
 	    inIfc.rob_setExecuted_doFinishMem_RegData (lsqDeqSt.instTag, resp);
 `endif
@@ -1239,7 +1299,9 @@ module mkMemExePipeline#(MemExeInput inIfc)(MemExePipeline);
         // write reg file & wakeup rs (this wakeup is late but MMIO is rare) & set ROB as Executed
         if(lsqDeqSt.dst matches tagged Valid .dst) begin
             inIfc.writeRegFile(dst.indx, resp);
+`ifdef SUPERSCALAR
             inIfc.setRegReadyAggr_mem(dst.indx);
+`endif
 `ifdef INCLUDE_TANDEM_VERIF
 	    inIfc.rob_setExecuted_doFinishMem_RegData (lsqDeqSt.instTag, resp);
 `endif
@@ -1321,13 +1383,17 @@ module mkMemExePipeline#(MemExeInput inIfc)(MemExePipeline);
     //=======================================================
 
     interface recvBypass = map(getRecvBypassIfc, bypassWire);
+`ifdef SUPERSCALAR
     interface rsMemIfc = rsMem;
+`endif
     interface dTlbIfc = dTlb;
     interface lsqIfc = lsq;
     interface stbIfc = stb;
     interface dMemIfc = dMem;
     interface specUpdate = joinSpeculationUpdate(vec(
+`ifdef SUPERSCALAR
         rsMem.specUpdate,
+`endif
         dispToRegQ.specUpdate,
         regToExeQ.specUpdate,
         dTlb.specUpdate,

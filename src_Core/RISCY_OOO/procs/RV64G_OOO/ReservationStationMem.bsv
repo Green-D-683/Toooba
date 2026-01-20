@@ -28,9 +28,14 @@ import ReservationStationEhr::*;
 import SynthParam::*;
 
 typedef struct {
-    MemFunc mem_func;
     ImmData imm;
+`ifdef SUPERSCALAR
+    MemFunc mem_func;
     LdStQTag ldstq_tag;
+`else // IN_ORDER
+    MemInst mem_inst;
+    Addr pc;
+`endif
 } MemRSData deriving(Bits, Eq, FShow);
 
 // MEM pipeline is aggressive, i.e. it recv bypass and early RS wakeup

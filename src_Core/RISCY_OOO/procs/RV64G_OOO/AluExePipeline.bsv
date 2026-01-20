@@ -36,6 +36,9 @@ import BrPred::*;
 import DirPredictor::*;
 import ReservationStationEhr::*;
 import ReservationStationAlu::*;
+`ifdef IN_ORDER
+import InOrderPipeline::*;
+`endif
 import ReorderBuffer::*;
 import SpecFifo::*;
 import HasSpecBits::*;
@@ -131,7 +134,14 @@ typedef struct {
 
 interface AluExeInput;
     // conservative scoreboard check in reg read stage
+`ifdef SUPERSCALAR
     method RegsReady sbCons_lazyLookup(PhyRegs r);
+`else // IN_ORDER
+    method RegsReady sb_lookup(PhyRegs r);
+
+    // IN-ORDER Decode Output
+    interface InOrderPipeline pipeIfc;
+`endif
     // Phys reg file
     method Data rf_rd1(PhyRIndx rindx);
     method Data rf_rd2(PhyRIndx rindx);
@@ -146,8 +156,10 @@ interface AluExeInput;
     method Action fetch_train_predictors(FetchTrainBP train);
 
     // global broadcast methods
+`ifdef SUPERSCALAR
     // set aggressive sb & wake up inst in RS
     method Action setRegReadyAggr(PhyRIndx dst);
+`endif
     // send bypass from exe and finish stage
     interface Vector#(2, SendBypass) sendBypass;
     // write reg file & set conservative sb
@@ -165,7 +177,9 @@ endinterface
 interface AluExePipeline;
     // recv bypass from exe and finish stages of each ALU pipeline
     interface Vector#(TMul#(2, AluExeNum), RecvBypass) recvBypass;
+`ifdef SUPERSCALAR
     interface ReservationStationAlu rsAluIfc;
+`endif
     interface SpeculationUpdate specUpdate;
     method Data getPerf(ExeStagePerfType t);
 endinterface
@@ -174,8 +188,12 @@ module mkAluExePipeline#(AluExeInput inIfc)(AluExePipeline);
     Bool verbose = False;
     Integer verbosity = 0;
 
+`ifdef SUPERSCALAR
     // alu reservation station
     ReservationStationAlu rsAlu <- mkReservationStationAlu;
+`else // IN_ORDER
+    InOrderPipeline pipe = inIfc.pipeIfc;
+`endif
     // pipeline fifos
     let dispToRegQ <- mkAluDispToRegFifo;
     let regToExeQ <- mkAluRegToExeFifo;
@@ -193,15 +211,24 @@ module mkAluExePipeline#(AluExeInput inIfc)(AluExePipeline);
     Count#(Data) exeRedirectOtherCnt <- mkCount(0);
 `endif
 
+`ifdef SUPERSCALAR
     rule doDispatchAlu;
         rsAlu.doDispatch;
         let x = rsAlu.dispatchData;
+`else // IN_ORDER
+    rule doDispatchAlu (pipe.first.data matches tagged AluExe .x);
+        /*
+            Look at front of In-Order Pipeline, and dequeue if item is tagged as Alu instruction
+        */
+`endif
         if(verbose) $display("[doDispatchAlu] ", fshow(x));
 
+`ifdef SUPERSCALAR
         // set reg ready aggressively
         if(x.regs.dst matches tagged Valid .dst) begin
             inIfc.setRegReadyAggr(dst.indx);
         end
+`endif
 
         // go to next stage
         dispToRegQ.enq(ToSpecFifo {
@@ -214,6 +241,10 @@ module mkAluExePipeline#(AluExeInput inIfc)(AluExePipeline);
             },
             spec_bits: x.spec_bits
         });
+`ifdef IN_ORDER
+        // Pipe Proceeds to next element
+        pipe.deq;
+`endif
     endrule
 
     rule doRegReadAlu;
@@ -223,7 +254,11 @@ module mkAluExePipeline#(AluExeInput inIfc)(AluExePipeline);
         if(verbose) $display("[doRegReadAlu] ", fshow(dispToReg));
 
         // check conservative scoreboard
+`ifdef SUPERSCALAR
         let regsReady = inIfc.sbCons_lazyLookup(x.regs);
+`else // IN_ORDER
+        let regsReady = inIfc.sb_lookup(x.regs);
+`endif
 
         // get rVal1 (check bypass)
         Data rVal1 = ?;
@@ -380,10 +415,14 @@ module mkAluExePipeline#(AluExeInput inIfc)(AluExePipeline);
 
     interface recvBypass = map(getRecvBypassIfc, bypassWire);
 
+`ifdef SUPERSCALAR
     interface rsAluIfc = rsAlu;
+`endif
 
     interface specUpdate = joinSpeculationUpdate(vec(
+`ifdef SUPERSCALAR
         rsAlu.specUpdate,
+`endif
         dispToRegQ.specUpdate,
         regToExeQ.specUpdate,
         exeToFinQ.specUpdate

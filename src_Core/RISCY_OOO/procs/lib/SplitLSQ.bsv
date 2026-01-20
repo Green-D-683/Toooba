@@ -51,6 +51,8 @@ export SplitLSQ(..);
 export mkSplitLSQ;
 export isLdQMemFunc;
 export isStQMemFunc;
+export getLsqTag;
+export enqToLSQ;
 
 // state transition
 // Ld: enq and Idle -> set computed |-> issue and Executing |-> resp and Done |-> Deq
@@ -515,6 +517,30 @@ function Bool isStQMemFunc(MemFunc f);
         St, Sc, Amo, Fence: (True);
         default: (False);
     endcase);
+endfunction
+
+function Maybe#(LdStQTag) getLsqTag(SplitLSQ q, MemFunc mem_func);
+    Bool isLdQ = isLdQMemFunc(mem_func);
+    Maybe#(LdStQTag) lsqEnqTag = isLdQ ? q.enqLdTag : q.enqStTag;
+    return lsqEnqTag;
+endfunction
+
+function Action enqToLSQ(
+        SplitLSQ q,
+        InstTag inst_tag,
+        MemInst mem_inst,
+        Maybe#(PhyDst) dst,
+        SpecBits spec_bits,
+        Bit#(16) pcHash
+    );
+    Bool isLdQ = isLdQMemFunc(mem_inst.mem_func);
+    // put in ldstq
+    if(isLdQ) begin
+        return q.enqLd(inst_tag, mem_inst, dst, spec_bits, pcHash);
+    end
+    else begin
+        return q.enqSt(inst_tag, mem_inst, dst, spec_bits, pcHash);
+    end
 endfunction
 
 // issueQ of LSQ tags for issue

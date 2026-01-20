@@ -47,6 +47,10 @@ import ReservationStationEhr::*;
 import ReservationStationAlu::*;
 import ReservationStationMem::*;
 import ReservationStationFpuMulDiv::*;
+`ifdef IN_ORDER
+import InOrderPipeline::*;
+import SpecFifo::*;
+`endif
 import SplitLSQ::*;
 
 import Cur_Cycle :: *;
@@ -61,14 +65,20 @@ interface RenameInput;
     interface FetchStage fetchIfc; // just for debug
     interface ReorderBufferSynth robIfc;
     interface RegRenamingTable rtIfc;
+`ifdef SUPERSCALAR
     interface ScoreboardCons sbConsIfc;
     interface ScoreboardAggr sbAggrIfc;
-    interface CsrFile csrfIfc;
-    interface EpochManager emIfc;
-    interface SpecTagManager smIfc;
     interface Vector#(AluExeNum, ReservationStationAlu) rsAluIfc;
     interface Vector#(FpuMulDivExeNum, ReservationStationFpuMulDiv) rsFpuMulDivIfc;
     interface ReservationStationMem rsMemIfc;
+`else // IN_ORDER
+    interface ScoreboardInOrder sbIfc;
+    interface InOrderPipeline pipeIfc;
+`endif
+    interface CsrFile csrfIfc;
+    interface EpochManager emIfc;
+    interface SpecTagManager smIfc;
+    
     interface SplitLSQ lsqIfc;
     // pending MMIO req from platform
     method Bool pendingMMIOPRq;
@@ -104,14 +114,19 @@ module mkRenameStage#(RenameInput inIfc)(RenameStage);
     FetchStage fetchStage = inIfc.fetchIfc;
     ReorderBufferSynth rob = inIfc.robIfc;
     RegRenamingTable regRenamingTable = inIfc.rtIfc;
+`ifdef SUPERSCALAR
     ScoreboardCons sbCons = inIfc.sbConsIfc;
     ScoreboardAggr sbAggr = inIfc.sbAggrIfc;
-    CsrFile csrf = inIfc.csrfIfc;
-    EpochManager epochManager = inIfc.emIfc;
-    SpecTagManager specTagManager = inIfc.smIfc;
     Vector#(AluExeNum, ReservationStationAlu) reservationStationAlu = inIfc.rsAluIfc;
     Vector#(FpuMulDivExeNum, ReservationStationFpuMulDiv) reservationStationFpuMulDiv = inIfc.rsFpuMulDivIfc;
     ReservationStationMem reservationStationMem = inIfc.rsMemIfc;
+`else // IN_ORDER
+    ScoreboardInOrder sb = inIfc.sbIfc;
+    InOrderPipeline pipe = inIfc.pipeIfc;
+`endif
+    CsrFile csrf = inIfc.csrfIfc;
+    EpochManager epochManager = inIfc.emIfc;
+    SpecTagManager specTagManager = inIfc.smIfc;
     SplitLSQ lsq = inIfc.lsqIfc;
 
     // performance counter
@@ -391,12 +406,22 @@ module mkRenameStage#(RenameInput inIfc)(RenameStage);
 
     // print rename info
     function Action printRename(Integer i,
+`ifdef SUPERSCALAR
                                 RegsReady regs_ready_cons,
                                 RegsReady regs_ready_aggr,
+// `else // IN_ORDER
+//                                 RegsReady regs_ready,
+`endif
                                 ArchRegs arch_regs,
                                 PhyRegs phy_regs);
     action
+`ifdef SUPERSCALAR
         $display("  [doRenaming - %d] regs_ready: cons ", i, fshow(regs_ready_cons), " ; aggr ", fshow(regs_ready_aggr));
+`else // IN_ORDER
+        // $display("  [doRenaming - %d] regs_ready: ", i, fshow(regs_ready));
+        $display("  [doRenaming - %d]", i);
+`endif
+        
         if (arch_regs.src1 matches tagged Valid .valid_src) begin
             if (phy_regs.src1 matches tagged Valid .valid_src_renamed) begin
                 $display("    [SRC RENAMING] ", fshow(valid_src), " -> ", fshow(valid_src_renamed));
@@ -478,6 +503,7 @@ module mkRenameStage#(RenameInput inIfc)(RenameStage);
         regRenamingTable.rename[0].claimRename(arch_regs, spec_bits);
 
         // scoreboard lookup
+`ifdef SUPERSCALAR
         let regs_ready_cons = sbCons.eagerLookup[0].get(phy_regs);
         let regs_ready_aggr = sbAggr.eagerLookup[0].get(phy_regs);
         sbCons.setBusy[0].set(phy_regs.dst);
@@ -487,10 +513,20 @@ module mkRenameStage#(RenameInput inIfc)(RenameStage);
         if (verbose) begin
             printRename(0, regs_ready_cons, regs_ready_aggr, arch_regs, phy_regs);
         end
+`else // IN_ORDER
+        // let regs_ready = sb.lookup[0].get(phy_regs);
+        sb.setBusy[0].set(phy_regs.dst);
 
+        // print rename info
+        if (verbose) begin
+            // printRename(0, regs_ready, arch_regs, phy_regs);
+            printRename(0, arch_regs, phy_regs);
+        end
+`endif
         // get ROB tag
         let inst_tag = rob.enqPort[0].getEnqInstTag;
 
+`ifdef SUPERSCALAR
         // CSR inst will be sent to ALU exe pipeline
         Bool to_exec = False;
         if (dInst.execFunc matches tagged Alu .alu) begin
@@ -518,6 +554,7 @@ module mkRenameStage#(RenameInput inIfc)(RenameStage);
                 regs_ready: regs_ready_aggr // alu will recv bypass
             });
         end
+`endif
 
         // send to ROB
         Bool will_dirty_fpu_state = False;
@@ -536,8 +573,11 @@ module mkRenameStage#(RenameInput inIfc)(RenameStage);
 			       || (dInst.imm == tagged Valid 0));
 	      will_dirty_fpu_state = (is_CSRR_W || (! rs1_is_0));
 	   end
-
+`ifdef SUPERSCALAR
         RobInstState rob_inst_state = to_exec ? NotDone : Executed;
+`else // IN_ORDER
+        RobInstState rob_inst_state = NotDone;
+`endif
         let y = ToReorderBuffer{pc: pc,
 				orig_inst: orig_inst,
                                 iType: dInst.iType,
@@ -547,24 +587,24 @@ module mkRenameStage#(RenameInput inIfc)(RenameStage);
 				store_data: ?,
 				store_data_BE: ?,
 `endif
-                                csr: dInst.csr,
-                                claimed_phy_reg: True, // XXX we always claim a free reg in rename
-                                trap: Invalid, // no trap
-	                        tval: 0,
-                                // default values of FullResult
-                                ppc_vaddr_csrData: PPC (ppc), // default use PPC
-                                fflags: 0,
-                                ////////
-                                will_dirty_fpu_state: will_dirty_fpu_state,
-                                rob_inst_state: rob_inst_state,
-                                lsqTag: ?,
-                                ldKilled: Invalid,
-                                memAccessAtCommit: False,
-                                lsqAtCommitNotified: False,
-                                nonMMIOStDone: False,
-                                epochIncremented: True, // system inst has incremented epoch
-                                spec_bits: spec_bits
-                               };
+                csr: dInst.csr,
+                claimed_phy_reg: True, // XXX we always claim a free reg in rename
+                trap: Invalid, // no trap
+                tval: 0,
+                // default values of FullResult
+                ppc_vaddr_csrData: PPC (ppc), // default use PPC
+                fflags: 0,
+                ////////
+                will_dirty_fpu_state: will_dirty_fpu_state,
+                rob_inst_state: rob_inst_state,
+                lsqTag: ?,
+                ldKilled: Invalid,
+                memAccessAtCommit: False,
+                lsqAtCommitNotified: False,
+                nonMMIOStDone: False,
+                epochIncremented: True, // system inst has incremented epoch
+                spec_bits: spec_bits
+                };
         rob.enqPort[0].enq(y);
 
         // record if we issue an CSR inst
@@ -645,6 +685,7 @@ module mkRenameStage#(RenameInput inIfc)(RenameStage);
         regRenamingTable.rename[0].claimRename(arch_regs, spec_bits);
 
         // scoreboard lookup
+`ifdef SUPERSCALAR
         let regs_ready_cons = sbCons.eagerLookup[0].get(phy_regs);
         let regs_ready_aggr = sbAggr.eagerLookup[0].get(phy_regs);
         sbCons.setBusy[0].set(phy_regs.dst);
@@ -654,6 +695,16 @@ module mkRenameStage#(RenameInput inIfc)(RenameStage);
         if (verbose) begin
             printRename(0, regs_ready_cons, regs_ready_aggr, arch_regs, phy_regs);
         end
+`elsif IN_ORDER
+        let regs_ready = sb.lookup[0].get(phy_regs);
+        sb.setBusy[0].set(phy_regs.dst);
+
+        // print rename info
+        if (verbose) begin
+            // printRename(0, regs_ready, arch_regs, phy_regs);
+            printRename(0, arch_regs, phy_regs);
+        end
+`endif
 
         // get ROB tag
         let inst_tag = rob.enqPort[0].getEnqInstTag;
@@ -800,11 +851,14 @@ module mkRenameStage#(RenameInput inIfc)(RenameStage);
 
         // Note that epoch will not change in this rule
 
+`ifdef SUPERSCALAR
         // track limited resource usage
         Vector#(AluExeNum, Bool) aluExeUsed = replicate(False);
         Vector#(FpuMulDivExeNum, Bool) fpuMulDivExeUsed = replicate(False);
         Bool memExeUsed = False;
+`endif
         Bool specTagClaimed = False; // specTagManager
+
 
         // track rename activity
         Bool doCorrectPath = False;
@@ -814,6 +868,7 @@ module mkRenameStage#(RenameInput inIfc)(RenameStage);
         // we may update it during the processing
         SpecBits spec_bits = specTagManager.currentSpecBits;
 
+`ifdef SUPERSCALAR
         // ALU RS valid counts
         Vector#(AluExeNum, Bit#(TLog#(TAdd#(`RS_ALU_SIZE, 1)))) aluRSCount;
         for(Integer i = 0; i < valueof(AluExeNum); i = i+1) begin
@@ -824,6 +879,7 @@ module mkRenameStage#(RenameInput inIfc)(RenameStage);
         for(Integer i = 0; i < valueof(FpuMulDivExeNum); i = i+1) begin
             fpuMulDivRSCount[i] = reservationStationFpuMulDiv[i].approximateCount;
         end
+`endif
 
         // We apply actions at the end of each iteration
         // We **cannot** apply actions at the end of rule,
@@ -832,7 +888,7 @@ module mkRenameStage#(RenameInput inIfc)(RenameStage);
             if(!stop && fetchStage.pipelines[i].canDeq) begin
                 let x = fetchStage.pipelines[i].first; // don't deq now, inst may not have resource
                 let pc = x.pc;
-	        let orig_inst = x.orig_inst;
+	            let orig_inst = x.orig_inst;
                 let ppc = x.ppc;
                 let main_epoch = x.main_epoch;
                 let dpTrain = x.dpTrain;
@@ -910,9 +966,12 @@ module mkRenameStage#(RenameInput inIfc)(RenameStage);
                     let phy_regs = rename_result.phy_regs;
 
                     // scoreboard lookup
+`ifdef SUPERSCALAR
                     let regs_ready_cons = sbCons.eagerLookup[i].get(phy_regs);
                     let regs_ready_aggr = sbAggr.eagerLookup[i].get(phy_regs);
-
+`else // IN_ORDER
+                    // let regs_ready = sb.lookup[0].get(phy_regs);
+`endif
                     // get ROB tag
                     let inst_tag = rob.enqPort[i].getEnqInstTag;
 
@@ -937,20 +996,36 @@ module mkRenameStage#(RenameInput inIfc)(RenameStage);
                     endcase
 
                     if (to_exec) begin
+                        let data = AluRSData {
+                            dInst: dInst, 
+                            dpTrain: dpTrain
+                        };
+                        let toRs = ToReservationStation {
+                            data: data,
+                            regs: phy_regs,
+                            tag: inst_tag,
+                            spec_bits: spec_bits,
+                            spec_tag: spec_tag,
+`ifdef SUPERSCALAR
+                            regs_ready: regs_ready_aggr // alu will recv bypass
+                        };
                         // find an ALU pipeline
                         function Bool aluValid(Integer k) = !aluExeUsed[k] && reservationStationAlu[k].canEnq;
                         Vector#(AluExeNum, Bool) aluReady = map(aluValid, genVector);
                         if(scheduleRS(aluRSCount, aluReady) matches tagged Valid .k) begin
                             // can process, send to ALU rs
                             aluExeUsed[k] = True; // mark resource used
-                            reservationStationAlu[k].enq(ToReservationStation {
-                                data: AluRSData {dInst: dInst, dpTrain: dpTrain},
-                                regs: phy_regs,
-                                tag: inst_tag,
-                                spec_bits: spec_bits,
-                                spec_tag: spec_tag,
-                                regs_ready: regs_ready_aggr // alu will recv bypass
-                            });
+                            reservationStationAlu[k].enq(toRs);
+`else
+                            // regs_ready: regs_ready // Unused, but to match type
+                            regs_ready: ?
+                        };
+                        if (pipe.notFull) begin
+                            pipe.enq(ToSpecFifo {
+                                data: tagged AluExe toRs,
+                                spec_bits: spec_bits
+                            });                            
+`endif
                         end
                         else begin
                             // cannot process this inst, stop
@@ -958,22 +1033,40 @@ module mkRenameStage#(RenameInput inIfc)(RenameStage);
                         end
                     end
                     else if (to_FpuMulDiv) begin
+                        let data = FpuMulDivRSData {
+                            execFunc: dInst.execFunc
+                        };
+                        let toRs = ToReservationStation {
+                            data: data,
+                            regs: phy_regs,
+                            tag: inst_tag,
+                            spec_bits: spec_bits,
+                            spec_tag: spec_tag,
+`ifdef SUPERSCALAR
+                            regs_ready: regs_ready_aggr // fpu mul div recv bypass
+                        };
+
                         function Bool fpuMulDivValid(Integer k) = !fpuMulDivExeUsed[k] && reservationStationFpuMulDiv[k].canEnq;
                         Vector#(FpuMulDivExeNum, Bool) fpuMulDivReady = map(fpuMulDivValid, genVector);
+
                         if(scheduleRS(fpuMulDivRSCount, fpuMulDivReady) matches tagged Valid .k) begin
                             // can process, send to FPU MUL DIV rs
                             fpuMulDivExeUsed[k] = True; // mark resource used
-                            reservationStationFpuMulDiv[k].enq(ToReservationStation {
-                                data: FpuMulDivRSData {execFunc: dInst.execFunc},
-                                regs: phy_regs,
-                                tag: inst_tag,
-                                spec_bits: spec_bits,
-                                spec_tag: spec_tag,
-                                regs_ready: regs_ready_aggr // fpu mul div recv bypass
+                            reservationStationFpuMulDiv[k].enq(toRs);
+`else // IN_ORDER
+                            // regs_ready: regs_ready // Unused, but to match type
+                            regs_ready: ?
+                        };
+                        if (pipe.notFull) begin
+                            pipe.enq(ToSpecFifo {
+                                data: tagged FpuMulDivExe toRs,
+                                spec_bits: spec_bits
                             });
+`endif
                             doAssert(ppc == fallthrough_pc, "FpuMulDiv next PC is not PC+4/PC+2");
                             doAssert(!isValid(dInst.csr), "FpuMulDiv never explicitly read/write CSR");
                             doAssert(!isValid(spec_tag), "should not have spec tag");
+
                         end
                         else begin
                             // cannot process this inst, stop
@@ -982,39 +1075,60 @@ module mkRenameStage#(RenameInput inIfc)(RenameStage);
                     end
                     else if (to_mem) begin
                         if (dInst.execFunc matches tagged Mem .mem_inst) begin
-                            Bool isLdQ = isLdQMemFunc(mem_inst.mem_func);
-                            Maybe#(LdStQTag) lsqEnqTag = isLdQ ? lsq.enqLdTag : lsq.enqStTag;
+`ifdef SUPERSCALAR
+                            Maybe#(LdStQTag) lsqEnqTag = getLsqTag(lsq, mem_inst.mem_func);
                             if (!memExeUsed &&& reservationStationMem.canEnq &&&
                                 lsqEnqTag matches tagged Valid .lsqTag) begin
+`else // IN_ORDER
+                            if (pipe.notFull) begin
+`endif
                                 // can process, send to Mem rs and LSQ
+`ifdef SUPERSCALAR
                                 memExeUsed = True; // mark resource used
                                 lsq_tag = lsqTag; // record LSQ tag
+`endif
+                                
                                 if (dInst.iType != Fence) begin // fence does not go to RS
-                                    reservationStationMem.enq(ToReservationStation {
-                                        data: MemRSData {
-                                            mem_func: mem_inst.mem_func,
-                                            imm: validValue(dInst.imm),
-                                            ldstq_tag: lsqTag
-                                        },
+                                    let data = MemRSData {
+                                        imm: validValue(dInst.imm),
+`ifdef SUPERSCALAR
+                                        mem_func: mem_inst.mem_func,
+                                        ldstq_tag: lsqTag
+`else 
+                                        mem_inst: mem_inst,
+                                        pc: pc
+`endif
+                                    };
+                                    let toRs = ToReservationStation {
+                                        data: data,
                                         regs: phy_regs,
                                         tag: inst_tag,
                                         spec_bits: spec_bits,
                                         spec_tag: spec_tag,
+`ifdef SUPERSCALAR
                                         regs_ready: regs_ready_aggr // mem currently recv bypass
-                                    });
+                                    };
+                                    reservationStationMem.enq(toRs);
+`else // IN_ORDER
+                                        // regs_ready: regs_ready
+                                        regs_ready: ?
+                                    };
+                                    pipe.enq(
+                                        ToSpecFifo {
+                                            data: tagged MemExe toRs,
+                                            spec_bits: spec_bits
+                                        }
+                                    );
+`endif 
                                 end
                                 doAssert(ppc == fallthrough_pc, "Mem next PC is not PC+4/PC+2");
                                 doAssert(!isValid(dInst.csr), "Mem never explicitly read/write CSR");
                                 doAssert((dInst.iType != Fence) == isValid(dInst.imm),
                                          "Mem (non-Fence) needs imm for virtual addr");
                                 doAssert(!isValid(spec_tag), "should not have spec tag");
-                                // put in ldstq
-                                if(isLdQ) begin
-                                    lsq.enqLd(inst_tag, mem_inst, phy_regs.dst, spec_bits, hash(pc));
-                                end
-                                else begin
-                                    lsq.enqSt(inst_tag, mem_inst, phy_regs.dst, spec_bits, hash(pc));
-                                end
+`ifdef SUPERSCALAR
+                                enqToLSQ(lsq, inst_tag, mem_inst, phy_regs.dst, spec_bits, hash(pc));
+`endif
                             end
                             else begin
                                 // cannot process this inst, stop
@@ -1029,7 +1143,7 @@ module mkRenameStage#(RenameInput inIfc)(RenameStage);
 
                     // apply remaining actions if inst can be processed
                     if(!stop) begin
-                        if(verbose) $display("[doRenaming - %d] ", i, fshow(x));
+                        if (verbose) $display("[doRenaming - %d] ", i, fshow(x));
 
                         // deq fetch & update epochs match
                         fetchStage.pipelines[i].deq;
@@ -1045,6 +1159,7 @@ module mkRenameStage#(RenameInput inIfc)(RenameStage);
                         regRenamingTable.rename[i].claimRename(arch_regs, renaming_spec_bits);
 
                         // Scoreboard Operations
+`ifdef SUPERSCALAR
                         sbCons.setBusy[i].set(phy_regs.dst);
                         sbAggr.setBusy[i].set(phy_regs.dst);
 
@@ -1052,7 +1167,15 @@ module mkRenameStage#(RenameInput inIfc)(RenameStage);
                         if (verbose) begin
                             printRename(i, regs_ready_cons, regs_ready_aggr, arch_regs, phy_regs);
                         end
+`else // IN_ORDER
+                        sb.setBusy[i].set(phy_regs.dst);
 
+                        // print rename info
+                        if (verbose) begin
+                            // printRename(i, regs_ready, arch_regs, phy_regs);
+                            printRename(i, arch_regs, phy_regs);
+                        end
+`endif
                         // Enqueue into reorder buffer
                         Bool will_dirty_fpu_state = False;
                         if (arch_regs.dst matches tagged Valid( tagged Fpu .r )) begin
@@ -1060,33 +1183,34 @@ module mkRenameStage#(RenameInput inIfc)(RenameStage);
                         end
                         RobInstState rob_inst_state = (to_exec || to_mem || to_FpuMulDiv) ? NotDone : Executed;
 
-                        let y = ToReorderBuffer{pc: pc,
-						orig_inst: orig_inst,
-                                                iType: dInst.iType,
-						dst: arch_regs.dst,
-						dst_data: ?,    // Available only after execution
+                        let y = ToReorderBuffer{
+                            pc: pc,
+                            orig_inst: orig_inst,
+                            iType: dInst.iType,
+                            dst: arch_regs.dst,
+                            dst_data: ?,    // Available only after execution
 `ifdef INCLUDE_TANDEM_VERIF
-						store_data: ?,
-						store_data_BE: ?,
+                            store_data: ?,
+                            store_data_BE: ?,
 `endif
-                                                csr: dInst.csr,
-                                                claimed_phy_reg: True, // XXX we always claim a free reg in rename
-                                                trap: Invalid, // no trap
-						tval: 0,
-                                                // default values of FullResult
-                                                ppc_vaddr_csrData: PPC (ppc), // default use PPC
-                                                fflags: 0,
-                                                ////////
-                                                will_dirty_fpu_state: will_dirty_fpu_state,
-                                                rob_inst_state: rob_inst_state,
-                                                lsqTag: lsq_tag,
-                                                ldKilled: Invalid,
-                                                memAccessAtCommit: False, // set by ROB in case of fence
-                                                lsqAtCommitNotified: False,
-                                                nonMMIOStDone: False,
-                                                epochIncremented: False,
-                                                spec_bits: spec_bits
-                                               };
+                            csr: dInst.csr,
+                            claimed_phy_reg: True, // XXX we always claim a free reg in rename
+                            trap: Invalid, // no trap
+                            tval: 0,
+                            // default values of FullResult
+                            ppc_vaddr_csrData: PPC (ppc), // default use PPC
+                            fflags: 0,
+                            ////////
+                            will_dirty_fpu_state: will_dirty_fpu_state,
+                            rob_inst_state: rob_inst_state,
+                            lsqTag: lsq_tag,
+                            ldKilled: Invalid,
+                            memAccessAtCommit: False, // set by ROB in case of fence
+                            lsqAtCommitNotified: False,
+                            nonMMIOStDone: False,
+                            epochIncremented: False,
+                            spec_bits: spec_bits 
+                        };
                         rob.enqPort[i].enq(y);
 
                         // record activity

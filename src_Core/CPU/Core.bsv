@@ -66,10 +66,15 @@ import ScoreboardSynth::*;
 import SpecTagManager::*;
 import Fpu::*;
 import MulDiv::*;
+`ifdef SUPERSCALAR
 import ReservationStationEhr::*;
 import ReservationStationAlu::*;
 import ReservationStationMem::*;
 import ReservationStationFpuMulDiv::*;
+`else
+import InOrderPipeline::*;
+import SpecFifo::*;
+`endif
 import AluExePipeline::*;
 import FpuMulDivExePipeline::*;
 import MemExePipeline::*;
@@ -194,6 +199,9 @@ interface CoreFixPoint;
     method Action killAll; // kill everything: used by commit stage
     interface Reg#(Bool) doStatsIfc;
     method Bool pendingIncorrectSpec;
+`ifdef IN_ORDER
+    interface InOrderPipeline pipeIfc;
+`endif
 endinterface
 
 typedef enum {
@@ -275,8 +283,13 @@ module mkCore#(CoreId coreId)(Core);
     // - Conservative sb is set when data is written into rf
     // - Aggressive sb is set when pipeline sends out wakeup for reservation staion
     //   Note that wakeup can be sent early if it knows when the data will be produced
+
+`ifdef SUPERSCALAR
     ScoreboardCons sbCons <- mkScoreboardCons; // conservative sb
     ScoreboardAggr sbAggr <- mkScoreboardAggr; // aggressive sb
+`else // IN_ORDER
+    ScoreboardInOrder sb <- mkScoreboardInOrder;
+`endif
 
     // MMIO: need to track in flight CSR inst or interrupt; note we can at most
     // 1 CSR inst or 1 interrupt in ROB, so just use 1 bit track it. Commit
@@ -308,8 +321,12 @@ module mkCore#(CoreId coreId)(Core);
         GlobalSpecUpdate#(CorrectSpecPortNum, ConflictWrongSpecPortNum) globalSpecUpdate <- mkGlobalSpecUpdate(
             joinSpeculationUpdate(
                 append(append(vec(regRenamingTable.specUpdate,
+`ifdef IN_ORDER
+                                  fix.pipeIfc.specUpdate,
+`endif
                                   specTagManager.specUpdate,
                                   fix.memExeIfc.specUpdate), aluSpecUpdate), fpuMulDivSpecUpdate)
+
             ),
             rob.specUpdate
         );
@@ -317,6 +334,7 @@ module mkCore#(CoreId coreId)(Core);
         // whether perf data is collected
         Reg#(Bool) doStatsReg <- mkConfigReg(False);
 
+`ifdef SUPERSCALAR
         // write aggressive elements + wakupe reservation stations
         function Action writeAggr(Integer wrAggrPort, PhyRIndx dst);
         action
@@ -338,6 +356,18 @@ module mkCore#(CoreId coreId)(Core);
             sbCons.setReady[wrConsPort].put(dst);
         endaction
         endfunction
+`else // IN_ORDER
+        // write conservative elements
+        function Action writeInOrder(Integer wrPort, PhyRIndx dst, Data data);
+        action
+            rf.write[wrPort].wr(dst, data);
+            sb.setReady[wrPort].put(dst);
+        endaction
+        endfunction
+
+        // In-Order pipeline passed to Exe Units and RenameStage
+        InOrderPipeline pipe <- mkInOrderPipeline;
+`endif
 
         Vector#(AluExeNum, FIFO#(FetchTrainBP)) trainBPQ <- replicateM(mkFIFO);
         Vector#(AluExeNum, AluExePipeline) aluExe;
@@ -359,7 +389,12 @@ module mkCore#(CoreId coreId)(Core);
                 endinterface);
             end
             let aluExeInput = (interface AluExeInput;
+`ifdef SUPERSCALAR
                 method sbCons_lazyLookup = sbCons.lazyLookup[aluRdPort(i)].get;
+`else // IN_ORDER
+                method sb_lookup = sb.lookup[aluRdPort(i)].get;
+                interface pipeIfc = pipe;
+`endif
                 method rf_rd1 = rf.read[aluRdPort(i)].rd1;
                 method rf_rd2 = rf.read[aluRdPort(i)].rd2;
                 method csrf_rd = csrf.rd;
@@ -368,9 +403,15 @@ module mkCore#(CoreId coreId)(Core);
                 method rob_getOrig_Inst = rob.getOrig_Inst[i].get;
                 method rob_setExecuted = rob.setExecuted_doFinishAlu[i].set;
                 method fetch_train_predictors = toPut(trainBPQ[i]).put;
+`ifdef SUPERSCALAR
                 method setRegReadyAggr = writeAggr(aluWrAggrPort(i));
+`endif
                 interface sendBypass = sendBypassIfc;
+`ifdef SUPERSCALAR
                 method writeRegFile = writeCons(aluWrConsPort(i));
+`else // IN_ORDER
+                method writeRegFile = writeInOrder(aluWrConsPort(i));
+`endif
                 method Action redirect(Addr new_pc, SpecTag spec_tag, InstTag inst_tag, SpecBits spec_bits);
                     if (verbose) begin
                         $display("[ALU redirect - %d] ", i, fshow(new_pc),
@@ -398,15 +439,24 @@ module mkCore#(CoreId coreId)(Core);
         Vector#(FpuMulDivExeNum, FpuMulDivExePipeline) fpuMulDivExe;
         for(Integer i = 0; i < valueof(FpuMulDivExeNum); i = i+1) begin
             let fpuMulDivExeInput = (interface FpuMulDivExeInput;
+`ifdef SUPERSCALAR
                 method sbCons_lazyLookup = sbCons.lazyLookup[fpuMulDivRdPort(i)].get;
+`else // IN_ORDER
+                method sb_lookup = sb.lookup[fpuMulDivRdPort(i)].get;
+                interface pipeIfc = pipe;
+`endif
                 method rf_rd1 = rf.read[fpuMulDivRdPort(i)].rd1;
                 method rf_rd2 = rf.read[fpuMulDivRdPort(i)].rd2;
                 method rf_rd3 = rf.read[fpuMulDivRdPort(i)].rd3;
                 method csrf_rd = csrf.rd;
                 method rob_setExecuted = rob.setExecuted_doFinishFpuMulDiv[i].set;
                 method Action writeRegFile(PhyRIndx dst, Data data);
+`ifdef SUPERSCALAR
                     writeAggr(fpuMulDivWrAggrPort(i), dst);
                     writeCons(fpuMulDivWrConsPort(i), dst, data);
+`else // IN_ORDER
+                    writeInOrder(fpuMulDivWrConsPort(i), dst, data);
+`endif
                 endmethod
                 method conflictWrongSpec = globalSpecUpdate.conflictWrongSpec[finishFpuMulDivConflictWrongSpecPort(i)].put(?);
                 method doStats = doStatsReg._read;
@@ -415,7 +465,12 @@ module mkCore#(CoreId coreId)(Core);
         end
 
         let memExeInput = (interface MemExeInput;
+`ifdef SUPERSCALAR
             method sbCons_lazyLookup = sbCons.lazyLookup[memRdPort].get;
+`else // IN_ORDER
+            method sb_lookup = sb.lookup[memRdPort].get;
+            interface pipeIfc = pipe;
+`endif
             method rf_rd1 = rf.read[memRdPort].rd1;
             method rf_rd2 = rf.read[memRdPort].rd2;
             method csrf_rd = csrf.rd;
@@ -425,13 +480,20 @@ module mkCore#(CoreId coreId)(Core);
 	    method rob_setExecuted_doFinishMem_RegData = rob.setExecuted_doFinishMem_RegData;
 `endif
             method rob_setExecuted_deqLSQ = rob.setExecuted_deqLSQ;
+`ifdef IN_ORDER
+            method rob_setLSQTag = rob.setLSQTag;
+`endif
             method isMMIOAddr = mmio.isMMIOAddr;
             method mmioReq = mmio.dataReq;
             method mmioRespVal = mmio.dataRespVal;
             method mmioRespDeq = mmio.dataRespDeq;
+`ifdef SUPERSCALAR
             method setRegReadyAggr_mem = writeAggr(memWrAggrPort);
             method setRegReadyAggr_forward = writeAggr(forwardWrAggrPort);
             method writeRegFile = writeCons(memWrConsPort);
+`else // IN_ORDER
+            method writeRegFile = writeInOrder(memWrConsPort);
+`endif
             method doStats = doStatsReg._read;
         endinterface);
         let memExe <- mkMemExePipeline(memExeInput);
@@ -444,9 +506,13 @@ module mkCore#(CoreId coreId)(Core);
         endmethod
         interface doStatsIfc = doStatsReg;
         method pendingIncorrectSpec = globalSpecUpdate.pendingIncorrectSpec;
+`ifdef IN_ORDER
+        interface pipeIfc = pipe;
+`endif
     endmodule
     CoreFixPoint coreFix <- moduleFix(mkCoreFixPoint);
 
+`ifdef SUPERSCALAR
     Vector#(AluExeNum, ReservationStationAlu) reservationStationAlu;
     for(Integer i = 0; i < valueof(AluExeNum); i = i+1) begin
         reservationStationAlu[i] = coreFix.aluExeIfc[i].rsAluIfc;
@@ -456,6 +522,9 @@ module mkCore#(CoreId coreId)(Core);
         reservationStationFpuMulDiv[i] = coreFix.fpuMulDivExeIfc[i].rsFpuMulDivIfc;
     end
     ReservationStationMem reservationStationMem = coreFix.memExeIfc.rsMemIfc;
+`else // IN_ORDER
+    InOrderPipeline pipe = coreFix.pipeIfc;
+`endif
     DTlbSynth dTlb = coreFix.memExeIfc.dTlbIfc;
     SplitLSQ lsq = coreFix.memExeIfc.lsqIfc;
     StoreBuffer stb = coreFix.memExeIfc.stbIfc;
@@ -545,14 +614,19 @@ module mkCore#(CoreId coreId)(Core);
         interface fetchIfc = fetchStage;
         interface robIfc = rob;
         interface rtIfc = regRenamingTable;
+`ifdef SUPERSCALAR
         interface sbConsIfc = sbCons;
         interface sbAggrIfc = sbAggr;
-        interface csrfIfc = csrf;
-        interface emIfc = epochManager;
-        interface smIfc = specTagManager;
         interface rsAluIfc = reservationStationAlu;
         interface rsFpuMulDivIfc = reservationStationFpuMulDiv;
         interface rsMemIfc = reservationStationMem;
+`else // IN_ORDER
+        interface sbIfc = sb;
+        interface pipeIfc = pipe;
+`endif
+        interface csrfIfc = csrf;
+        interface emIfc = epochManager;
+        interface smIfc = specTagManager;
         interface lsqIfc = lsq;
         method pendingMMIOPRq = mmio.hasPendingPRq;
         method issueCsrInstOrInterrupt = csrInstOrInterruptInflight_rename._write(True);
@@ -582,38 +656,38 @@ module mkCore#(CoreId coreId)(Core);
         method tlbNoPendingReq = iTlb.noPendingReq && dTlb.noPendingReq;
 
         method setFlushTlbs;
-	   action
-	      flush_tlbs <= True;
-              // $display ("%0d: %m.commitInput.setFlushTlbs", cur_cycle);
-	   endaction
+            action
+                flush_tlbs <= True;
+                    // $display ("%0d: %m.commitInput.setFlushTlbs", cur_cycle);
+            endaction
         endmethod
 
         method setUpdateVMInfo;
-	   action
-	      update_vm_info <= True;
-              // $display ("%0d: %m.commitInput.setUpdateVMInfo", cur_cycle);
-	   endaction
+            action
+                update_vm_info <= True;
+                    // $display ("%0d: %m.commitInput.setUpdateVMInfo", cur_cycle);
+            endaction
         endmethod
 
         method setFlushReservation;
-	   action
-	      flush_reservation <= True;
-              // $display ("%0d: %m.commitInput.setFlushReservation", cur_cycle);
-	   endaction
+            action
+                flush_reservation <= True;
+                    // $display ("%0d: %m.commitInput.setFlushReservation", cur_cycle);
+            endaction
         endmethod
 
         method setFlushBrPred;
-	   action
-	      flush_brpred <= True;
-              // $display ("%0d: %m.commitInput.setFlushBrPred", cur_cycle);
-	   endaction
+            action
+                flush_brpred <= True;
+                    // $display ("%0d: %m.commitInput.setFlushBrPred", cur_cycle);
+            endaction
         endmethod
 
         method setFlushCaches;
-	   action
-	      flush_caches <= True;
-              // $display ("%0d: %m.commitInput.setFlushCaches", cur_cycle);
-	   endaction
+            action
+                flush_caches <= True;
+                    // $display ("%0d: %m.commitInput.setFlushCaches", cur_cycle);
+            endaction
         endmethod
 
         method setReconcileI = reconcile_i._write(True);
@@ -642,6 +716,7 @@ module mkCore#(CoreId coreId)(Core);
     endinterface);
     CommitStage commitStage <- mkCommitStage(commitInput);
 
+`ifdef SUPERSCALAR
     // send rob enq time to reservation stations
     (* fire_when_enabled, no_implicit_conditions *)
     rule sendRobEnqTime;
@@ -654,6 +729,7 @@ module mkCore#(CoreId coreId)(Core);
             reservationStationAlu[i].setRobEnqTime(t);
         end
     endrule
+`endif
 
     // preempt has 2 functions here
     // 1. break scheduling cycles
@@ -1370,10 +1446,10 @@ module mkCore#(CoreId coreId)(Core);
 `ifdef INCLUDE_GDB_CONTROL
             if (!running) renameStage.debug_halt_req;
 `endif
-	    fetchStage.start(startpc);
+	        fetchStage.start(startpc);
             started <= True;
 `ifdef INCLUDE_GDB_CONTROL
-	   rg_core_run_state <= CORE_RUNNING;
+	        rg_core_run_state <= CORE_RUNNING;
 `endif
             mmio.setHtifAddrs(toHostAddr, fromHostAddr);
 

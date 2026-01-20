@@ -33,6 +33,9 @@ import Exec::*;
 import Performance::*;
 import ReservationStationEhr::*;
 import ReservationStationFpuMulDiv::*;
+`ifdef IN_ORDER
+import InOrderPipeline::*;
+`endif
 import ReorderBuffer::*;
 import HasSpecBits::*;
 import SpecFifo::*;
@@ -83,7 +86,14 @@ endmodule
 
 interface FpuMulDivExeInput;
     // conservative scoreboard check in reg read stage
+`ifdef SUPERSCALAR
     method RegsReady sbCons_lazyLookup(PhyRegs r);
+`else // IN_ORDER
+    method RegsReady sb_lookup(PhyRegs r);
+
+    // IN-ORDER Decode Output
+    interface InOrderPipeline pipeIfc;
+`endif
     // Phys reg file
     method Data rf_rd1(PhyRIndx rindx);
     method Data rf_rd2(PhyRIndx rindx);
@@ -105,7 +115,9 @@ endinterface
 interface FpuMulDivExePipeline;
     // recv bypass from the ALU exe and finish stages
     interface Vector#(TMul#(2, AluExeNum), RecvBypass) recvBypass;
+`ifdef SUPERSCALAR
     interface ReservationStationFpuMulDiv rsFpuMulDivIfc;
+`endif
     interface SpeculationUpdate specUpdate;
     // performance
     method Data getPerf(ExeStagePerfType t);
@@ -114,8 +126,12 @@ endinterface
 module mkFpuMulDivExePipeline#(FpuMulDivExeInput inIfc)(FpuMulDivExePipeline);
     Bool verbose = False;
 
+`ifdef SUPERSCALAR
     // fpu mul div reservation station
     ReservationStationFpuMulDiv rsFpuMulDiv <- mkReservationStationFpuMulDiv;
+`else // IN_ORDER
+    InOrderPipeline pipe = inIfc.pipeIfc;
+`endif
 
     // pipeline fifos
     let dispToRegQ <- mkFpuMulDivDispToRegFifo;
@@ -137,9 +153,17 @@ module mkFpuMulDivExePipeline#(FpuMulDivExeInput inIfc)(FpuMulDivExePipeline);
     Count#(Data) exeFpSqrtCnt <- mkCount(0);
 `endif
 
+    
+`ifdef SUPERSCALAR
     rule doDispatchFpuMulDiv;
         rsFpuMulDiv.doDispatch;
         let x = rsFpuMulDiv.dispatchData;
+`else // IN_ORDER
+    rule doDispatchFpuMulDiv (pipe.first.data matches tagged FpuMulDivExe .x);
+        /*
+            Look at front of In-Order Pipeline, and dequeue if item is tagged as FpuMulDiv instruction
+        */
+`endif
         if(verbose) $display("[doDispatchFpuMulDiv] ", fshow(x));
 
         // FPU MUL DIV never have exception or misprecition, so no spec tag
@@ -154,6 +178,10 @@ module mkFpuMulDivExePipeline#(FpuMulDivExeInput inIfc)(FpuMulDivExePipeline);
             },
             spec_bits: x.spec_bits
         });
+`ifdef IN_ORDER
+        // Pipe Proceeds to next element
+        pipe.deq;
+`endif
     endrule
 
     rule doRegReadFpuMulDiv;
@@ -163,7 +191,11 @@ module mkFpuMulDivExePipeline#(FpuMulDivExeInput inIfc)(FpuMulDivExePipeline);
         if(verbose) $display("[doRegReadFpuMulDiv] ", fshow(dispToReg));
 
         // check conservative scoreboard
+`ifdef SUPERSCALAR
         let regsReady = inIfc.sbCons_lazyLookup(x.regs);
+`else // IN_ORDER
+        let regsReady = inIfc.sb_lookup(x.regs);
+`endif
 
         // get rVal1 (check bypass)
         Data rVal1 = ?;
@@ -300,10 +332,14 @@ module mkFpuMulDivExePipeline#(FpuMulDivExeInput inIfc)(FpuMulDivExePipeline);
 
     interface recvBypass = map(getRecvBypassIfc, bypassWire);
 
+`ifdef SUPERSCALAR
     interface rsFpuMulDivIfc = rsFpuMulDiv;
+`endif
 
     interface specUpdate = joinSpeculationUpdate(vec(
+`ifdef SUPERSCALAR
         rsFpuMulDiv.specUpdate,
+`endif
         dispToRegQ.specUpdate,
         regToExeQ.specUpdate,
         fpuExec.specUpdate,

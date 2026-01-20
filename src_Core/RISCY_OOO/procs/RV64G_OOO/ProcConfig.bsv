@@ -336,6 +336,16 @@
 
 `endif
 
+`ifdef IN_ORDER
+    `undef SUPERSCALAR
+    `define INORDER_CORE 
+    // Force SupSize to 1 for In-Order Core
+    `undef sizeSup
+    `define sizeSup 1
+`else
+    `define SUPERSCALAR
+`endif
+
 //
 // ==== derived parameters ====
 //
