@@ -161,8 +161,8 @@ interface MemExeInput;
     interface InOrderPipeline pipeIfc;
 `endif
     // Phys reg file
-    method Data rf_rd1(PhyRIndx rindx);
-    method Data rf_rd2(PhyRIndx rindx);
+    method ActionValue#(Data) rf_rd1(PhyRIndx rindx);
+    method ActionValue#(Data) rf_rd2(PhyRIndx rindx);
     // CSR file
     method Data csrf_rd(CSR csr);
     // ROB
@@ -189,6 +189,9 @@ interface MemExeInput;
     // set aggressive sb & wake up RS
     method Action setRegReadyAggr_mem(PhyRIndx dst);
     method Action setRegReadyAggr_forward(PhyRIndx dst);
+`else // IN_ORDER
+    // send bypass from exe and finish stage
+    interface Vector#(2, SendBypass) sendBypass;
 `endif
     // write reg file & set conservative sb
     method Action writeRegFile(PhyRIndx dst, Data data);
@@ -199,7 +202,7 @@ endinterface
 
 interface MemExePipeline;
     // recv bypass from exe and finish stages of each ALU pipeline
-    interface Vector#(TMul#(2, AluExeNum), RecvBypass) recvBypass;
+    interface Vector#(NumBypass, RecvBypass) recvBypass;
 `ifdef SUPERSCALAR
     interface ReservationStationMem rsMemIfc;
 `endif
@@ -218,7 +221,7 @@ interface MemExePipeline;
 endinterface
 
 module mkMemExePipeline#(MemExeInput inIfc)(MemExePipeline);
-    Bool verbose = False;
+    Bool verbose = True;
 
     // we change cache request in case of single core, becaues our MSI protocol
     // is not good with single core
@@ -263,6 +266,10 @@ module mkMemExePipeline#(MemExeInput inIfc)(MemExePipeline);
     ReservationStationMem rsMem <- mkReservationStationMem;
 `else // IN_ORDER
     InOrderPipeline pipe = inIfc.pipeIfc;
+
+    // index to send bypass, ordering doesn't matter
+    Integer exeSendBypassPort = 0;
+    Integer finishSendBypassPort = 1;
 `endif
 
     // pipeline fifos
@@ -270,7 +277,7 @@ module mkMemExePipeline#(MemExeInput inIfc)(MemExePipeline);
     let regToExeQ <- mkMemRegToExeFifo;
 
     // wire to recv bypass
-    Vector#(TMul#(2, AluExeNum), RWire#(Tuple2#(PhyRIndx, Data))) bypassWire <- replicateM(mkRWire);
+    Vector#(NumBypass, RWire#(Tuple2#(PhyRIndx, Data))) bypassWire <- replicateM(mkRWire);
 
     // TLB
     DTlbSynth dTlb <- mkDTlbSynth;
@@ -436,10 +443,11 @@ module mkMemExePipeline#(MemExeInput inIfc)(MemExePipeline);
         let ldstqtag = validValue(ldstqtagMaybe);
         enqToLSQ(lsq, x.tag, x.data.mem_inst, x.regs.dst, x.spec_bits, hash(x.data.pc));
 
-        let isFence = False;
+        let mem_func = x.data.mem_inst.mem_func;
+        let isFence = mem_func == Fence;
         inIfc.rob_setLSQTag(x.tag, ldstqtag, isFence);
 
-        let mem_func = x.data.mem_inst.mem_func;
+        if (!isFence) begin
 `endif
         if(verbose) $display("[doDispatchMem] ", fshow(x));
 
@@ -467,6 +475,7 @@ module mkMemExePipeline#(MemExeInput inIfc)(MemExePipeline);
         end
 `endif
 `ifdef IN_ORDER
+        end
         // Pipe Proceeds to next element
         pipe.deq;
 `endif
@@ -488,13 +497,15 @@ module mkMemExePipeline#(MemExeInput inIfc)(MemExePipeline);
         // get rVal1 (check bypass)
         Data rVal1 = ?;
         if(x.regs.src1 matches tagged Valid .src1) begin
-            rVal1 <- readRFBypass(src1, regsReady.src1, inIfc.rf_rd1(src1), bypassWire);
+            let d <- inIfc.rf_rd1(src1);
+            rVal1 <- readRFBypass(src1, regsReady.src1, d, bypassWire);
         end
 
         // get rVal2 (check bypass)
         Data rVal2 = ?;
         if(x.regs.src2 matches tagged Valid .src2) begin
-            rVal2 <- readRFBypass(src2, regsReady.src2, inIfc.rf_rd2(src2), bypassWire);
+            let d <- inIfc.rf_rd2(src2);
+            rVal2 <- readRFBypass(src2, regsReady.src2, d, bypassWire);
         end
 
         // go to next stage
@@ -679,11 +690,15 @@ module mkMemExePipeline#(MemExeInput inIfc)(MemExePipeline);
         if(issRes matches tagged Forward .forward) begin
             forwardQ.enq(tuple2(info.tag, forward.data));
             // early wake up
-`ifdef SUPERSCALAR
+
             if(forward.dst matches tagged Valid .dst) begin
+`ifdef SUPERSCALAR
                 inIfc.setRegReadyAggr_forward(dst.indx);
-            end
+`else // IN_ORDER
+                inIfc.sendBypass[exeSendBypassPort].send(dst.indx, forward.data);
 `endif
+            end
+
 `ifdef PERF_COUNT
             // perf: load forward
             if(inIfc.doStats) begin
@@ -748,6 +763,9 @@ module mkMemExePipeline#(MemExeInput inIfc)(MemExePipeline);
         LSQRespLdResult res <- lsq.respLd(tag, data);
         if(verbose) $display(rule_name, " ", fshow(tag), "; ", fshow(data), "; ", fshow(res));
         if(res.dst matches tagged Valid .dst) begin
+`ifdef IN_ORDER
+            inIfc.sendBypass[finishSendBypassPort].send(dst.indx, res.data);
+`endif
             inIfc.writeRegFile(dst.indx, res.data);
 
 `ifdef INCLUDE_TANDEM_VERIF
@@ -893,6 +911,8 @@ module mkMemExePipeline#(MemExeInput inIfc)(MemExePipeline);
             inIfc.writeRegFile(dst.indx, resp);
 `ifdef SUPERSCALAR
             inIfc.setRegReadyAggr_mem(dst.indx);
+`else // IN_ORDER
+            inIfc.sendBypass[finishSendBypassPort].send(dst.indx, resp);
 `endif
 `ifdef INCLUDE_TANDEM_VERIF
 	    inIfc.rob_setExecuted_doFinishMem_RegData (lsqDeqLd.instTag, resp);
@@ -973,6 +993,8 @@ module mkMemExePipeline#(MemExeInput inIfc)(MemExePipeline);
             inIfc.writeRegFile(dst.indx, resp);
 `ifdef SUPERSCALAR
             inIfc.setRegReadyAggr_mem(dst.indx);
+`else // IN_ORDER
+            inIfc.sendBypass[finishSendBypassPort].send(dst.indx, resp);
 `endif
 `ifdef INCLUDE_TANDEM_VERIF
 	    inIfc.rob_setExecuted_doFinishMem_RegData (lsqDeqLd.instTag, resp);
@@ -1195,6 +1217,8 @@ module mkMemExePipeline#(MemExeInput inIfc)(MemExePipeline);
             inIfc.writeRegFile(dst.indx, resp);
 `ifdef SUPERSCALAR
             inIfc.setRegReadyAggr_mem(dst.indx);
+`else // IN_ORDER
+            inIfc.sendBypass[finishSendBypassPort].send(dst.indx, resp);
 `endif
 `ifdef INCLUDE_TANDEM_VERIF
 	    inIfc.rob_setExecuted_doFinishMem_RegData (lsqDeqSt.instTag, resp);
@@ -1301,6 +1325,8 @@ module mkMemExePipeline#(MemExeInput inIfc)(MemExePipeline);
             inIfc.writeRegFile(dst.indx, resp);
 `ifdef SUPERSCALAR
             inIfc.setRegReadyAggr_mem(dst.indx);
+`else // IN_ORDER
+            inIfc.sendBypass[finishSendBypassPort].send(dst.indx, resp);
 `endif
 `ifdef INCLUDE_TANDEM_VERIF
 	    inIfc.rob_setExecuted_doFinishMem_RegData (lsqDeqSt.instTag, resp);

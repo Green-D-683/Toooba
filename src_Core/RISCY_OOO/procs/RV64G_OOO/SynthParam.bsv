@@ -22,6 +22,7 @@
 // CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+`include "ProcConfig.bsv"
 import DefaultValue::*;
 import Types::*;
 import ProcTypes::*;
@@ -39,8 +40,13 @@ typedef TDiv#(SupSize, 2) FpuMulDivExeNum;
 typedef TAdd#(2, TAdd#(FpuMulDivExeNum, AluExeNum)) RFileWrPortNum;
 typedef TAdd#(2, TAdd#(FpuMulDivExeNum, AluExeNum)) RFileRdPortNum;
 
+`ifdef SUPERSCALAR
 // sb lazy lookup num: same as RFile read, becaues all pipelines recv bypass
 typedef RFileRdPortNum SbLazyLookupPortNum;
+`else 
+// In-Order Core has a single scoreboard - needs an additional port for the Rename Stage
+typedef TAdd#(RFileRdPortNum, 1) SbLazyLookupPortNum; 
+`endif
 
 // ports for writing conservative elements
 // i.e. write rf & set conservative sb & wake up rs in conservative pipeline (i.e. not recv bypass)
@@ -67,6 +73,11 @@ function Integer aluRdPort(Integer i) = i;
 function Integer fpuMulDivRdPort(Integer i) = valueof(AluExeNum) + i;
 Integer memRdPort = valueof(FpuMulDivExeNum) + valueof(AluExeNum);
 Integer debuggerPort = memRdPort + 1;
+`ifdef IN_ORDER
+Integer renameRdPort = debuggerPort + 1;
+`else 
+Integer renameRdPort = 0;
+`endif
 
 // ports for correct spec, ordering doesn't matter
 typedef TAdd#(2, AluExeNum) CorrectSpecPortNum;
@@ -77,3 +88,10 @@ Integer finishMemCorrectSpecPort = 1 + valueof(AluExeNum);
 // ports for manual conflict with wrong spec, ordering doesn't matter
 typedef FpuMulDivExeNum ConflictWrongSpecPortNum;
 function Integer finishFpuMulDivConflictWrongSpecPort(Integer i) = i;
+
+`ifdef SUPERSCALAR
+typedef TMul#(2, AluExeNum) numBypass;
+`else // IN_ORDER
+// In-order core also has memory bypass + reg write delay bypass
+typedef TMul#(2, TAdd#(AluExeNum, 2)) NumBypass;
+`endif 

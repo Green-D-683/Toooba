@@ -342,6 +342,8 @@
     // Force SupSize to 1 for In-Order Core
     `undef sizeSup
     `define sizeSup 1
+    `undef LAZY_RS_RF
+    `define LAZY_RS_RF False
 `else
     `define SUPERSCALAR
 `endif

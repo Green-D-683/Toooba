@@ -41,9 +41,9 @@ interface RFileWr;
 endinterface
 
 interface RFileRd;
-    method Data rd1( PhyRIndx rindx );
-    method Data rd2( PhyRIndx rindx );
-    method Data rd3( PhyRIndx rindx );
+    method ActionValue#(Data) rd1( PhyRIndx rindx );
+    method ActionValue#(Data) rd2( PhyRIndx rindx );
+    method ActionValue#(Data) rd3( PhyRIndx rindx );
 endinterface
 
 interface RFile#(numeric type wrNum, numeric type rdNum);
@@ -57,7 +57,7 @@ endinterface
 module mkRFile#(Bool lazy)( RFile#(wrNum, rdNum) ) provisos (
     NumAlias#(ehrPortNum, TAdd#(wrNum, 1)) // wr [< rd] (only in case lazy = false)
 );
-    let verbose = False;
+    let verbose = True;
 
     // phy reg init val must be 0: because x0 is renamed to phy reg 0,
     // which must be 0 at all time
@@ -86,8 +86,11 @@ module mkRFile#(Bool lazy)( RFile#(wrNum, rdNum) ) provisos (
         end
     end
 
-    function Data getRead(PhyRIndx rindx);
-        return rdData[rindx];
+    function ActionValue#(Data) getRead(PhyRIndx rindx, Integer i);
+        actionvalue
+            if (verbose) $display("[RFile] rd_%d: r %h => %h", i, rindx, rdData[rindx]);
+            return rdData[rindx];
+        endactionvalue
     endfunction
 
     Vector#(wrNum, RFileWr) wrIfc = ?;
@@ -103,9 +106,9 @@ module mkRFile#(Bool lazy)( RFile#(wrNum, rdNum) ) provisos (
     Vector#(rdNum, RFileRd) rdIfc = ?;
     for(Integer i = 0; i < valueof(rdNum); i = i+1) begin
         rdIfc[i] = (interface RFileRd;
-            method Data rd1( PhyRIndx rindx ) = getRead(rindx);
-            method Data rd2( PhyRIndx rindx ) = getRead(rindx);
-            method Data rd3( PhyRIndx rindx ) = getRead(rindx);
+            method ActionValue#(Data) rd1( PhyRIndx rindx ) = getRead(rindx, i);
+            method ActionValue#(Data) rd2( PhyRIndx rindx ) = getRead(rindx, i);
+            method ActionValue#(Data) rd3( PhyRIndx rindx ) = getRead(rindx, i);
         endinterface);
     end
 

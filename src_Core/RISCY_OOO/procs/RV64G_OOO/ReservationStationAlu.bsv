@@ -34,6 +34,7 @@ typedef struct {
     DirPredTrainInfo dpTrain;
 } AluRSData deriving(Bits, Eq, FShow);
 
+`ifdef SUPERSCALAR
 // ALU pipeline is aggressive, i.e. it recv bypass and early RS wakeup
 typedef ReservationStation#(`RS_ALU_SIZE, WrAggrPortNum, AluRSData) ReservationStationAlu;
 (* synthesize *)
@@ -41,3 +42,4 @@ module mkReservationStationAlu(ReservationStationAlu);
     ReservationStationAlu m <- mkReservationStation(`LAZY_RS_RF, `RS_LAZY_ENQ, valueof(AluExeNum) > 1);
     return m;
 endmodule
+`endif

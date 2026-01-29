@@ -143,8 +143,8 @@ interface AluExeInput;
     interface InOrderPipeline pipeIfc;
 `endif
     // Phys reg file
-    method Data rf_rd1(PhyRIndx rindx);
-    method Data rf_rd2(PhyRIndx rindx);
+    method ActionValue#(Data) rf_rd1(PhyRIndx rindx);
+    method ActionValue#(Data) rf_rd2(PhyRIndx rindx);
     // CSR file
     method Data csrf_rd(CSR csr);
     // ROB
@@ -176,7 +176,7 @@ endinterface
 
 interface AluExePipeline;
     // recv bypass from exe and finish stages of each ALU pipeline
-    interface Vector#(TMul#(2, AluExeNum), RecvBypass) recvBypass;
+    interface Vector#(NumBypass, RecvBypass) recvBypass;
 `ifdef SUPERSCALAR
     interface ReservationStationAlu rsAluIfc;
 `endif
@@ -199,7 +199,7 @@ module mkAluExePipeline#(AluExeInput inIfc)(AluExePipeline);
     let regToExeQ <- mkAluRegToExeFifo;
     let exeToFinQ <- mkAluExeToFinFifo;
     // wire to recv bypass
-    Vector#(TMul#(2, AluExeNum), RWire#(Tuple2#(PhyRIndx, Data))) bypassWire <- replicateM(mkRWire);
+    Vector#(NumBypass, RWire#(Tuple2#(PhyRIndx, Data))) bypassWire <- replicateM(mkRWire);
     // index to send bypass, ordering doesn't matter
     Integer exeSendBypassPort = 0;
     Integer finishSendBypassPort = 1;
@@ -258,6 +258,8 @@ module mkAluExePipeline#(AluExeInput inIfc)(AluExePipeline);
         let regsReady = inIfc.sbCons_lazyLookup(x.regs);
 `else // IN_ORDER
         let regsReady = inIfc.sb_lookup(x.regs);
+
+        if (verbose) $display("[regsReady] ", fshow(x.dInst), fshow(regsReady));
 `endif
 
         // get rVal1 (check bypass)
@@ -266,13 +268,15 @@ module mkAluExePipeline#(AluExeInput inIfc)(AluExePipeline);
             rVal1 = inIfc.csrf_rd(csr);
         end
         else if(x.regs.src1 matches tagged Valid .src1) begin
-            rVal1 <- readRFBypass(src1, regsReady.src1, inIfc.rf_rd1(src1), bypassWire);
+            let d <- inIfc.rf_rd1(src1);
+            rVal1 <- readRFBypass(src1, regsReady.src1, d, bypassWire);
         end
 
         // get rVal2 (check bypass)
         Data rVal2 = ?;
         if(x.regs.src2 matches tagged Valid .src2) begin
-            rVal2 <- readRFBypass(src2, regsReady.src2, inIfc.rf_rd2(src2), bypassWire);
+            let d <- inIfc.rf_rd2(src2);
+            rVal2 <- readRFBypass(src2, regsReady.src2, d, bypassWire);
         end
 
         // get PC and PPC

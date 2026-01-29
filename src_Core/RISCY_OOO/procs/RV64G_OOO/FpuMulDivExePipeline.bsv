@@ -95,9 +95,9 @@ interface FpuMulDivExeInput;
     interface InOrderPipeline pipeIfc;
 `endif
     // Phys reg file
-    method Data rf_rd1(PhyRIndx rindx);
-    method Data rf_rd2(PhyRIndx rindx);
-    method Data rf_rd3(PhyRIndx rindx);
+    method ActionValue#(Data) rf_rd1(PhyRIndx rindx);
+    method ActionValue#(Data) rf_rd2(PhyRIndx rindx);
+    method ActionValue#(Data) rf_rd3(PhyRIndx rindx);
     // CSR file
     method Data csrf_rd(CSR csr);
     // ROB
@@ -114,7 +114,7 @@ endinterface
 
 interface FpuMulDivExePipeline;
     // recv bypass from the ALU exe and finish stages
-    interface Vector#(TMul#(2, AluExeNum), RecvBypass) recvBypass;
+    interface Vector#(NumBypass, RecvBypass) recvBypass;
 `ifdef SUPERSCALAR
     interface ReservationStationFpuMulDiv rsFpuMulDivIfc;
 `endif
@@ -138,7 +138,7 @@ module mkFpuMulDivExePipeline#(FpuMulDivExeInput inIfc)(FpuMulDivExePipeline);
     let regToExeQ <- mkFpuMulDivRegToExeFifo;
     
     // wire to recv bypass
-    Vector#(TMul#(2, AluExeNum), RWire#(Tuple2#(PhyRIndx, Data))) bypassWire <- replicateM(mkRWire);
+    Vector#(NumBypass, RWire#(Tuple2#(PhyRIndx, Data))) bypassWire <- replicateM(mkRWire);
 
     // mul div fpu func units
     MulDivExec mulDivExec <- mkMulDivExec;
@@ -200,19 +200,22 @@ module mkFpuMulDivExePipeline#(FpuMulDivExeInput inIfc)(FpuMulDivExePipeline);
         // get rVal1 (check bypass)
         Data rVal1 = ?;
         if(x.regs.src1 matches tagged Valid .src1) begin
-            rVal1 <- readRFBypass(src1, regsReady.src1, inIfc.rf_rd1(src1), bypassWire);
+            let d <- inIfc.rf_rd1(src1);
+            rVal1 <- readRFBypass(src1, regsReady.src1, d, bypassWire);
         end
 
         // get rVal2 (check bypass)
         Data rVal2 = ?;
         if(x.regs.src2 matches tagged Valid .src2) begin
-            rVal2 <- readRFBypass(src2, regsReady.src2, inIfc.rf_rd2(src2), bypassWire);
+            let d <- inIfc.rf_rd2(src2);
+            rVal2 <- readRFBypass(src2, regsReady.src2, d, bypassWire);
         end
 
         // get rVal3 (check bypass)
         Data rVal3 = ?;
         if(x.regs.src3 matches tagged Valid .src3) begin
-            rVal3 <- readRFBypass(src3, regsReady.src3, inIfc.rf_rd3(src3), bypassWire);
+            let d <- inIfc.rf_rd3(src3);
+            rVal3 <- readRFBypass(src3, regsReady.src3, d, bypassWire);
         end
 
         // go to next stage

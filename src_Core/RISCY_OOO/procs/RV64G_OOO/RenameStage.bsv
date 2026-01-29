@@ -107,7 +107,7 @@ interface RenameStage;
 endinterface
 
 module mkRenameStage#(RenameInput inIfc)(RenameStage);
-    Bool verbose = False;
+    Bool verbose = True;
     Integer verbosity = 0;
 
     // func units
@@ -409,8 +409,8 @@ module mkRenameStage#(RenameInput inIfc)(RenameStage);
 `ifdef SUPERSCALAR
                                 RegsReady regs_ready_cons,
                                 RegsReady regs_ready_aggr,
-// `else // IN_ORDER
-//                                 RegsReady regs_ready,
+`else // IN_ORDER
+                                RegsReady regs_ready,
 `endif
                                 ArchRegs arch_regs,
                                 PhyRegs phy_regs);
@@ -418,8 +418,8 @@ module mkRenameStage#(RenameInput inIfc)(RenameStage);
 `ifdef SUPERSCALAR
         $display("  [doRenaming - %d] regs_ready: cons ", i, fshow(regs_ready_cons), " ; aggr ", fshow(regs_ready_aggr));
 `else // IN_ORDER
-        // $display("  [doRenaming - %d] regs_ready: ", i, fshow(regs_ready));
-        $display("  [doRenaming - %d]", i);
+        $display("  [doRenaming - %d] regs_ready: ", i, fshow(regs_ready));
+        //$display("  [doRenaming - %d]", i);
 `endif
         
         if (arch_regs.src1 matches tagged Valid .valid_src) begin
@@ -514,19 +514,19 @@ module mkRenameStage#(RenameInput inIfc)(RenameStage);
             printRename(0, regs_ready_cons, regs_ready_aggr, arch_regs, phy_regs);
         end
 `else // IN_ORDER
-        // let regs_ready = sb.lookup[0].get(phy_regs);
         sb.setBusy[0].set(phy_regs.dst);
+        let regs_ready = sb.lookup[renameRdPort].get(phy_regs);
 
         // print rename info
         if (verbose) begin
-            // printRename(0, regs_ready, arch_regs, phy_regs);
-            printRename(0, arch_regs, phy_regs);
+            printRename(0, regs_ready, arch_regs, phy_regs);
+            //printRename(0, arch_regs, phy_regs);
         end
 `endif
         // get ROB tag
         let inst_tag = rob.enqPort[0].getEnqInstTag;
 
-`ifdef SUPERSCALAR
+
         // CSR inst will be sent to ALU exe pipeline
         Bool to_exec = False;
         if (dInst.execFunc matches tagged Alu .alu) begin
@@ -545,16 +545,29 @@ module mkRenameStage#(RenameInput inIfc)(RenameStage);
 
         // send to ALU reservation station
         if (to_exec) begin
-            reservationStationAlu[0].enq(ToReservationStation {
-                data: AluRSData {dInst: dInst, dpTrain: dpTrain},
+            let data = AluRSData {dInst: dInst, dpTrain: dpTrain};
+            let toRs = ToReservationStation {
+                data: data,
                 regs: phy_regs,
                 tag: inst_tag,
                 spec_bits: spec_bits,
                 spec_tag: Invalid,
+`ifdef SUPERSCALAR
                 regs_ready: regs_ready_aggr // alu will recv bypass
-            });
-        end
+            };
+            reservationStationAlu[0].enq(toRs);
+`else // IN_ORDER
+                regs_ready: ?
+            };
+            if (pipe.notFull) begin
+                pipe.enq(ToSpecFifo {
+                    data: tagged AluExe toRs,
+                    spec_bits: spec_bits
+                });  
+            end
 `endif
+        end
+
 
         // send to ROB
         Bool will_dirty_fpu_state = False;
@@ -567,17 +580,14 @@ module mkRenameStage#(RenameInput inIfc)(RenameStage);
         if (dInst.csr matches tagged Valid .csr
 	    &&& ((dInst.iType == Csr)
 		 && ((csr == CSRfflags) || (csr == CSRfrm) || (csr == CSRfcsr))))
-	   begin
-	      Bool is_CSRR_W = (dInst.execFunc == tagged Alu Csrw);
-	      Bool rs1_is_0 = ((arch_regs.src2 == tagged Valid (tagged Gpr 0))
-			       || (dInst.imm == tagged Valid 0));
-	      will_dirty_fpu_state = (is_CSRR_W || (! rs1_is_0));
-	   end
-`ifdef SUPERSCALAR
+        begin
+            Bool is_CSRR_W = (dInst.execFunc == tagged Alu Csrw);
+            Bool rs1_is_0 = ((arch_regs.src2 == tagged Valid (tagged Gpr 0))
+                    || (dInst.imm == tagged Valid 0));
+            will_dirty_fpu_state = (is_CSRR_W || (! rs1_is_0));
+        end
         RobInstState rob_inst_state = to_exec ? NotDone : Executed;
-`else // IN_ORDER
-        RobInstState rob_inst_state = NotDone;
-`endif
+
         let y = ToReorderBuffer{pc: pc,
 				orig_inst: orig_inst,
                                 iType: dInst.iType,
@@ -696,13 +706,13 @@ module mkRenameStage#(RenameInput inIfc)(RenameStage);
             printRename(0, regs_ready_cons, regs_ready_aggr, arch_regs, phy_regs);
         end
 `elsif IN_ORDER
-        let regs_ready = sb.lookup[0].get(phy_regs);
+        let regs_ready = sb.lookup[renameRdPort].get(phy_regs);
         sb.setBusy[0].set(phy_regs.dst);
 
         // print rename info
         if (verbose) begin
-            // printRename(0, regs_ready, arch_regs, phy_regs);
-            printRename(0, arch_regs, phy_regs);
+            printRename(0, regs_ready, arch_regs, phy_regs);
+            // printRename(0, arch_regs, phy_regs);
         end
 `endif
 
@@ -1086,9 +1096,10 @@ module mkRenameStage#(RenameInput inIfc)(RenameStage);
 `ifdef SUPERSCALAR
                                 memExeUsed = True; // mark resource used
                                 lsq_tag = lsqTag; // record LSQ tag
-`endif
+
                                 
                                 if (dInst.iType != Fence) begin // fence does not go to RS
+`endif
                                     let data = MemRSData {
                                         imm: validValue(dInst.imm),
 `ifdef SUPERSCALAR
@@ -1109,6 +1120,7 @@ module mkRenameStage#(RenameInput inIfc)(RenameStage);
                                         regs_ready: regs_ready_aggr // mem currently recv bypass
                                     };
                                     reservationStationMem.enq(toRs);
+                                end
 `else // IN_ORDER
                                         // regs_ready: regs_ready
                                         regs_ready: ?
@@ -1120,7 +1132,6 @@ module mkRenameStage#(RenameInput inIfc)(RenameStage);
                                         }
                                     );
 `endif 
-                                end
                                 doAssert(ppc == fallthrough_pc, "Mem next PC is not PC+4/PC+2");
                                 doAssert(!isValid(dInst.csr), "Mem never explicitly read/write CSR");
                                 doAssert((dInst.iType != Fence) == isValid(dInst.imm),
@@ -1172,8 +1183,9 @@ module mkRenameStage#(RenameInput inIfc)(RenameStage);
 
                         // print rename info
                         if (verbose) begin
-                            // printRename(i, regs_ready, arch_regs, phy_regs);
-                            printRename(i, arch_regs, phy_regs);
+                            let regs_ready = sb.lookup[renameRdPort].get(phy_regs);
+                            printRename(i, regs_ready, arch_regs, phy_regs);
+                            // printRename(i, arch_regs, phy_regs);
                         end
 `endif
                         // Enqueue into reorder buffer

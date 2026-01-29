@@ -38,6 +38,7 @@ typedef struct {
 `endif
 } MemRSData deriving(Bits, Eq, FShow);
 
+`ifdef SUPERSCALAR
 // MEM pipeline is aggressive, i.e. it recv bypass and early RS wakeup
 typedef ReservationStation#(`RS_MEM_SIZE, WrAggrPortNum, MemRSData) ReservationStationMem;
 (* synthesize *)
@@ -45,3 +46,4 @@ module mkReservationStationMem(ReservationStationMem);
     let m <- mkReservationStation(`LAZY_RS_RF, `RS_LAZY_ENQ, False);
     return m;
 endmodule
+`endif 

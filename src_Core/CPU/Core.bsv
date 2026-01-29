@@ -334,6 +334,26 @@ module mkCore#(CoreId coreId)(Core);
         // whether perf data is collected
         Reg#(Bool) doStatsReg <- mkConfigReg(False);
 
+        function Vector#(2, SendBypass) getSendBypassIfc(Integer i);
+            Vector#(2, SendBypass) sendBypassIfc; // exe and finish
+            for(Integer sendPort = 0; sendPort < 2; sendPort = sendPort + 1) begin
+                sendBypassIfc[sendPort] = (interface SendBypass;
+                    method Action send(PhyRIndx dst, Data data);
+                        // broadcast bypass
+                        Integer recvPort = valueof(AluExeNum) * sendPort + i;
+                        for(Integer j = 0; j < valueof(FpuMulDivExeNum); j = j+1) begin
+                            fix.fpuMulDivExeIfc[j].recvBypass[recvPort].recv(dst, data);
+                        end
+                        fix.memExeIfc.recvBypass[recvPort].recv(dst, data);
+                        for(Integer j = 0; j < valueof(AluExeNum); j = j+1) begin
+                            fix.aluExeIfc[j].recvBypass[recvPort].recv(dst, data);
+                        end
+                    endmethod
+                endinterface);
+            end
+            return sendBypassIfc;
+        endfunction
+
 `ifdef SUPERSCALAR
         // write aggressive elements + wakupe reservation stations
         function Action writeAggr(Integer wrAggrPort, PhyRIndx dst);
@@ -357,13 +377,32 @@ module mkCore#(CoreId coreId)(Core);
         endaction
         endfunction
 `else // IN_ORDER
+
+        Vector#(WrConsPortNum, Fifo#(2, PhyRIndx)) setReadyQs <- replicateM(mkPipelineFifo);
+        Vector#(2, SendBypass) sendBypass = getSendBypassIfc(valueOf(AluExeNum) + 2);
+
         // write conservative elements
         function Action writeInOrder(Integer wrPort, PhyRIndx dst, Data data);
-        action
-            rf.write[wrPort].wr(dst, data);
-            sb.setReady[wrPort].put(dst);
-        endaction
+            action
+                rf.write[wrPort].wr(dst, data);
+                setReadyQs[wrPort].enq(dst);
+                sendBypass[1].send(dst, data);
+            endaction
         endfunction
+
+        Vector#(WrConsPortNum,Integer) indexes = genVector;
+        function Bool setReadyQNotEmpty(Integer i) = setReadyQs[i].notEmpty;
+
+        rule doSbSetReady (any(setReadyQNotEmpty, indexes));
+            for(Integer i=0; i<valueOf(WrConsPortNum); i=i+1) begin
+                let setReadyQ = setReadyQs[i];
+                if (setReadyQ.notEmpty) begin
+                    let dst = setReadyQ.first;
+                    sb.setReady[i].put(dst);
+                    setReadyQ.deq();
+                end
+            end
+        endrule 
 
         // In-Order pipeline passed to Exe Units and RenameStage
         InOrderPipeline pipe <- mkInOrderPipeline;
@@ -372,22 +411,22 @@ module mkCore#(CoreId coreId)(Core);
         Vector#(AluExeNum, FIFO#(FetchTrainBP)) trainBPQ <- replicateM(mkFIFO);
         Vector#(AluExeNum, AluExePipeline) aluExe;
         for(Integer i = 0; i < valueof(AluExeNum); i = i+1) begin
-            Vector#(2, SendBypass) sendBypassIfc; // exe and finish
-            for(Integer sendPort = 0; sendPort < 2; sendPort = sendPort + 1) begin
-                sendBypassIfc[sendPort] = (interface SendBypass;
-                    method Action send(PhyRIndx dst, Data data);
-                        // broadcast bypass
-                        Integer recvPort = valueof(AluExeNum) * sendPort + i;
-                        for(Integer j = 0; j < valueof(FpuMulDivExeNum); j = j+1) begin
-                            fix.fpuMulDivExeIfc[j].recvBypass[recvPort].recv(dst, data);
-                        end
-                        fix.memExeIfc.recvBypass[recvPort].recv(dst, data);
-                        for(Integer j = 0; j < valueof(AluExeNum); j = j+1) begin
-                            fix.aluExeIfc[j].recvBypass[recvPort].recv(dst, data);
-                        end
-                    endmethod
-                endinterface);
-            end
+            // Vector#(2, SendBypass) sendBypassIfc; // exe and finish
+            // for(Integer sendPort = 0; sendPort < 2; sendPort = sendPort + 1) begin
+            //     sendBypassIfc[sendPort] = (interface SendBypass;
+            //         method Action send(PhyRIndx dst, Data data);
+            //             // broadcast bypass
+            //             Integer recvPort = valueof(AluExeNum) * sendPort + i;
+            //             for(Integer j = 0; j < valueof(FpuMulDivExeNum); j = j+1) begin
+            //                 fix.fpuMulDivExeIfc[j].recvBypass[recvPort].recv(dst, data);
+            //             end
+            //             fix.memExeIfc.recvBypass[recvPort].recv(dst, data);
+            //             for(Integer j = 0; j < valueof(AluExeNum); j = j+1) begin
+            //                 fix.aluExeIfc[j].recvBypass[recvPort].recv(dst, data);
+            //             end
+            //         endmethod
+            //     endinterface);
+            // end
             let aluExeInput = (interface AluExeInput;
 `ifdef SUPERSCALAR
                 method sbCons_lazyLookup = sbCons.lazyLookup[aluRdPort(i)].get;
@@ -406,7 +445,7 @@ module mkCore#(CoreId coreId)(Core);
 `ifdef SUPERSCALAR
                 method setRegReadyAggr = writeAggr(aluWrAggrPort(i));
 `endif
-                interface sendBypass = sendBypassIfc;
+                interface sendBypass = getSendBypassIfc(i); //sendBypassIfc;
 `ifdef SUPERSCALAR
                 method writeRegFile = writeCons(aluWrConsPort(i));
 `else // IN_ORDER
@@ -493,6 +532,7 @@ module mkCore#(CoreId coreId)(Core);
             method writeRegFile = writeCons(memWrConsPort);
 `else // IN_ORDER
             method writeRegFile = writeInOrder(memWrConsPort);
+            interface sendBypass = getSendBypassIfc(valueOf(AluExeNum) + 1);
 `endif
             method doStats = doStatsReg._read;
         endinterface);
