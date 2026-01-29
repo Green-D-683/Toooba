@@ -187,7 +187,7 @@ def main (argv = None):
     args_dict ['results'] = results
 
     # Create a TAP file to output individual test results in TAP format
-    tap_out = open("../isa_test_report.tap", "w")
+    tap_out = open("./isa_test_report.tap", "w")
     tap_out.write("1.." + str(n_tests) + "\n")
     tap_out.close()
 
