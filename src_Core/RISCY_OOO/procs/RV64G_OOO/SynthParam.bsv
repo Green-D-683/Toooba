@@ -90,7 +90,7 @@ typedef FpuMulDivExeNum ConflictWrongSpecPortNum;
 function Integer finishFpuMulDivConflictWrongSpecPort(Integer i) = i;
 
 `ifdef SUPERSCALAR
-typedef TMul#(2, AluExeNum) numBypass;
+typedef TMul#(2, AluExeNum) NumBypass;
 `else // IN_ORDER
 // In-order core also has memory bypass + reg write delay bypass
 typedef TMul#(2, TAdd#(AluExeNum, 2)) NumBypass;
