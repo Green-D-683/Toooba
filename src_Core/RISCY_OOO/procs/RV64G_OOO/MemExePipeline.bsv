@@ -426,24 +426,28 @@ module mkMemExePipeline#(MemExeInput inIfc)(MemExePipeline);
     // Reservation Station Stuff
     //=======================================================
 
-
+// Use SPEC_DEBUG to trace specbits of memory instructions through pipeline - also enables printouts when a spec tag is resolved
 `ifdef SPEC_DEBUG
+`define MEM_INST_TRACE Sc
+`endif
+
+`ifdef MEM_INST_TRACE
     if (True) begin
         rule monitorPipe;
             if (
                 True 
 `ifdef IN_ORDER
                 &&& pipe.first.data matches tagged MemExe .x
-                &&& x.data.mem_inst.mem_func == Sc
+                &&& x.data.mem_inst.mem_func == `MEM_INST_TRACE
 `else // SUPERSCALAR
-                &&& rsMem.dispatchData.data.mem_func == Sc
+                &&& rsMem.dispatchData.data.mem_func == `MEM_INST_TRACE
                 &&& rsMem.dispatchData matches .x
 `endif
             ) $display("[pipe - first] ", fshow(x));
         endrule
     end
 `endif
-    
+
 `ifdef SUPERSCALAR
     rule doDispatchMem;
         rsMem.doDispatch;
@@ -500,12 +504,12 @@ module mkMemExePipeline#(MemExeInput inIfc)(MemExePipeline);
 `endif
     endrule
 
-`ifdef SPEC_DEBUG
+`ifdef MEM_INST_TRACE
     if (True) begin
         rule monitorDispToRegQ;
             if (
                 True 
-                && dispToRegQ.first.data.mem_func == Sc
+                && dispToRegQ.first.data.mem_func == `MEM_INST_TRACE
             ) $display("[dispToRegQ - first] ", fshow(dispToRegQ.first));
         endrule
     end
@@ -552,12 +556,12 @@ module mkMemExePipeline#(MemExeInput inIfc)(MemExePipeline);
         });
     endrule
 
-`ifdef SPEC_DEBUG
+`ifdef MEM_INST_TRACE
     if (True) begin
         rule monitorRegToExeQ;
             if (
                 True 
-                && regToExeQ.first.data.mem_func == Sc
+                && regToExeQ.first.data.mem_func == `MEM_INST_TRACE
             ) $display("[regToExeQ - first] ", fshow(regToExeQ.first));
         endrule
     end
