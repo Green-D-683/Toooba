@@ -411,22 +411,6 @@ module mkCore#(CoreId coreId)(Core);
         Vector#(AluExeNum, FIFO#(FetchTrainBP)) trainBPQ <- replicateM(mkFIFO);
         Vector#(AluExeNum, AluExePipeline) aluExe;
         for(Integer i = 0; i < valueof(AluExeNum); i = i+1) begin
-            // Vector#(2, SendBypass) sendBypassIfc; // exe and finish
-            // for(Integer sendPort = 0; sendPort < 2; sendPort = sendPort + 1) begin
-            //     sendBypassIfc[sendPort] = (interface SendBypass;
-            //         method Action send(PhyRIndx dst, Data data);
-            //             // broadcast bypass
-            //             Integer recvPort = valueof(AluExeNum) * sendPort + i;
-            //             for(Integer j = 0; j < valueof(FpuMulDivExeNum); j = j+1) begin
-            //                 fix.fpuMulDivExeIfc[j].recvBypass[recvPort].recv(dst, data);
-            //             end
-            //             fix.memExeIfc.recvBypass[recvPort].recv(dst, data);
-            //             for(Integer j = 0; j < valueof(AluExeNum); j = j+1) begin
-            //                 fix.aluExeIfc[j].recvBypass[recvPort].recv(dst, data);
-            //             end
-            //         endmethod
-            //     endinterface);
-            // end
             let aluExeInput = (interface AluExeInput;
 `ifdef SUPERSCALAR
                 method sbCons_lazyLookup = sbCons.lazyLookup[aluRdPort(i)].get;

@@ -215,11 +215,13 @@ module mkAluExePipeline#(AluExeInput inIfc)(AluExePipeline);
     rule doDispatchAlu;
         rsAlu.doDispatch;
         let x = rsAlu.dispatchData;
+        let spec_bits = x.spec_bits;
 `else // IN_ORDER
     rule doDispatchAlu (pipe.first.data matches tagged AluExe .x);
         /*
             Look at front of In-Order Pipeline, and dequeue if item is tagged as Alu instruction
         */
+        let spec_bits = pipe.first.spec_bits;
 `endif
         if(verbose) $display("[doDispatchAlu] ", fshow(x));
 
@@ -239,7 +241,7 @@ module mkAluExePipeline#(AluExeInput inIfc)(AluExePipeline);
                 dpTrain: x.data.dpTrain,
                 spec_tag: x.spec_tag
             },
-            spec_bits: x.spec_bits
+            spec_bits: spec_bits
         });
 `ifdef IN_ORDER
         // Pipe Proceeds to next element
@@ -360,7 +362,7 @@ module mkAluExePipeline#(AluExeInput inIfc)(AluExePipeline);
         // update the instruction in the reorder buffer.
         inIfc.rob_setExecuted(
             x.tag,
-	    x.data,
+	        x.data,
             x.csrData,
             x.controlFlow
         );
@@ -384,6 +386,10 @@ module mkAluExePipeline#(AluExeInput inIfc)(AluExePipeline);
             });
             if(verbose) $display("alu mispredict pc¤: %x, nextPc: %x, %d",
                                   x.controlFlow.pc, x.controlFlow.nextPc, cur_cycle);
+`ifdef SPEC_DEBUG
+            UInt#(NumSpecTags) xn = unpack(extend(validValue(x.spec_tag)));
+            $display("[incorrectSpec] ", pack(2)<<xn);
+`endif
 `ifdef PERF_COUNT
             // performance counter
             if(inIfc.doStats) begin
@@ -398,6 +404,10 @@ module mkAluExePipeline#(AluExeInput inIfc)(AluExePipeline);
         else (* nosplit *) begin
             // release spec tag
             if (x.spec_tag matches tagged Valid .valid_spec_tag) begin
+`ifdef SPEC_DEBUG
+                UInt#(NumSpecTags) xn = unpack(extend(valid_spec_tag));
+                $display("[correctSpec] ", pack(1)<<xn);
+`endif
                 inIfc.correctSpec(valid_spec_tag);
             end
             // train branch predictor if needed

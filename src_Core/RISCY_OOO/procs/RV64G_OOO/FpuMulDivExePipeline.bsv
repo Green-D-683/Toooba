@@ -158,11 +158,13 @@ module mkFpuMulDivExePipeline#(FpuMulDivExeInput inIfc)(FpuMulDivExePipeline);
     rule doDispatchFpuMulDiv;
         rsFpuMulDiv.doDispatch;
         let x = rsFpuMulDiv.dispatchData;
+        let spec_bits = x.spec_bits;
 `else // IN_ORDER
     rule doDispatchFpuMulDiv (pipe.first.data matches tagged FpuMulDivExe .x);
         /*
             Look at front of In-Order Pipeline, and dequeue if item is tagged as FpuMulDiv instruction
         */
+        let spec_bits = pipe.first.spec_bits;
 `endif
         if(verbose) $display("[doDispatchFpuMulDiv] ", fshow(x));
 
@@ -176,7 +178,7 @@ module mkFpuMulDivExePipeline#(FpuMulDivExeInput inIfc)(FpuMulDivExePipeline);
                 regs: x.regs,
                 tag: x.tag
             },
-            spec_bits: x.spec_bits
+            spec_bits: spec_bits
         });
 `ifdef IN_ORDER
         // Pipe Proceeds to next element

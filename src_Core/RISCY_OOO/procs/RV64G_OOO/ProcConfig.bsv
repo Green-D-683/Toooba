@@ -189,7 +189,9 @@
 `ifdef CORE_SMALL
 
     // superscalar
+    `ifndef sizeSup
     `define sizeSup 2
+    `endif
 
     // ROB
     `define ROB_SIZE 64

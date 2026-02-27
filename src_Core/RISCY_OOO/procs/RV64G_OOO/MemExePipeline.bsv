@@ -221,7 +221,7 @@ interface MemExePipeline;
 endinterface
 
 module mkMemExePipeline#(MemExeInput inIfc)(MemExePipeline);
-    Bool verbose = True;
+    Bool verbose = False;
 
     // we change cache request in case of single core, becaues our MSI protocol
     // is not good with single core
@@ -426,6 +426,23 @@ module mkMemExePipeline#(MemExeInput inIfc)(MemExePipeline);
     // Reservation Station Stuff
     //=======================================================
 
+
+`ifdef SPEC_DEBUG
+    if (True) begin
+        rule monitorPipe;
+            if (
+                True 
+`ifdef IN_ORDER
+                &&& pipe.first.data matches tagged MemExe .x
+                &&& x.data.mem_inst.mem_func == Sc
+`else // SUPERSCALAR
+                &&& rsMem.dispatchData.data.mem_func == Sc
+                &&& rsMem.dispatchData matches .x
+`endif
+            ) $display("[pipe - first] ", fshow(x));
+        endrule
+    end
+`endif
     
 `ifdef SUPERSCALAR
     rule doDispatchMem;
@@ -433,15 +450,17 @@ module mkMemExePipeline#(MemExeInput inIfc)(MemExePipeline);
         let x = rsMem.dispatchData;
         let ldstqtag = x.data.ldstq_tag;
         let mem_func = x.data.mem_func;
+        let spec_bits = x.spec_bits;
 `else // IN_ORDER
     rule doDispatchMem (pipe.first.data matches tagged MemExe .x);
         /*
             Look at front of In-Order Pipeline, and dequeue if item is tagged as Mem instruction. The In-Order Core also allocates the LSQ at this stage.
         */
+        let spec_bits = pipe.first.spec_bits;
         let ldstqtagMaybe = getLsqTag(lsq, x.data.mem_inst.mem_func);
         when(isValid(ldstqtagMaybe), noAction); // stall if LQ/SQ is full
         let ldstqtag = validValue(ldstqtagMaybe);
-        enqToLSQ(lsq, x.tag, x.data.mem_inst, x.regs.dst, x.spec_bits, hash(x.data.pc));
+        enqToLSQ(lsq, x.tag, x.data.mem_inst, x.regs.dst, spec_bits, hash(x.data.pc));
 
         let mem_func = x.data.mem_inst.mem_func;
         let isFence = mem_func == Fence;
@@ -465,7 +484,7 @@ module mkMemExePipeline#(MemExeInput inIfc)(MemExePipeline);
                 tag: x.tag,
                 ldstq_tag: ldstqtag
             },
-            spec_bits: x.spec_bits
+            spec_bits: spec_bits
         });
 
 `ifdef PERF_COUNT
@@ -480,6 +499,17 @@ module mkMemExePipeline#(MemExeInput inIfc)(MemExePipeline);
         pipe.deq;
 `endif
     endrule
+
+`ifdef SPEC_DEBUG
+    if (True) begin
+        rule monitorDispToRegQ;
+            if (
+                True 
+                && dispToRegQ.first.data.mem_func == Sc
+            ) $display("[dispToRegQ - first] ", fshow(dispToRegQ.first));
+        endrule
+    end
+`endif
 
     rule doRegReadMem;
         dispToRegQ.deq;
@@ -521,6 +551,17 @@ module mkMemExePipeline#(MemExeInput inIfc)(MemExePipeline);
             spec_bits: dispToReg.spec_bits
         });
     endrule
+
+`ifdef SPEC_DEBUG
+    if (True) begin
+        rule monitorRegToExeQ;
+            if (
+                True 
+                && regToExeQ.first.data.mem_func == Sc
+            ) $display("[regToExeQ - first] ", fshow(regToExeQ.first));
+        endrule
+    end
+`endif
 
     rule doExeMem;
         regToExeQ.deq;

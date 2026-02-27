@@ -57,7 +57,7 @@ endinterface
 module mkRFile#(Bool lazy)( RFile#(wrNum, rdNum) ) provisos (
     NumAlias#(ehrPortNum, TAdd#(wrNum, 1)) // wr [< rd] (only in case lazy = false)
 );
-    let verbose = True;
+    let verbose = False;
 
     // phy reg init val must be 0: because x0 is renamed to phy reg 0,
     // which must be 0 at all time
