@@ -342,23 +342,28 @@ def run_command (command, log_fd, write_log=True):
         if python_minor_version < 6:
             # Python 3.5 and earlier
             result = subprocess.run (args = command,
-                                    bufsize = 0,
-                                    stdout = subprocess.PIPE,
+                                    bufsize = -1,
+                                    stdout = log_fd,
                                     stderr = subprocess.STDOUT,
                                     universal_newlines = True,
                                     timeout=timeout)
         else:
+            if write_log:
+                stdout = log_fd
+                log_fd.write("Stdout:\n")
+                bufsize = -1
+            else:
+                stdout = subprocess.PIPE
+                bufsize = 0
             # Python 3.6 and later
             result = subprocess.run (args = command,
-                                    bufsize = 0,
-                                    stdout = subprocess.PIPE, # Can this be piped into tail? In real-time? Or just do instret capture of 
+                                    bufsize = bufsize,
+                                    stdout = stdout,
                                     stderr = subprocess.STDOUT,
                                     encoding='utf-8',
                                     timeout=timeout)
         if write_log or result.returncode != 0:
             log_fd.write(f"Finished with exit code {result.returncode}\n")
-            log_fd.write("Stdout:\n")
-            log_fd.write (result.stdout)
         return result
     except subprocess.TimeoutExpired:
         sys.stderr.write(f"TIMEOUT: {command_str} !\n")
