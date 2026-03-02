@@ -109,7 +109,7 @@ test: exe_HW_sim $(TESTS_DIR)/elf_to_hex/elf_to_hex
 .PHONY: isa_tests
 isa_tests: exe_HW_sim $(TESTS_DIR)/elf_to_hex
 	@echo "Running regressions on ISA tests; saving logs in Logs/"
-	$(TESTS_DIR)/Run_regression.py  ./exe_HW_sim  $(REPO)  ./Logs  $(ARCH)
+	$(TESTS_DIR)/Run_regression.py  ./exe_HW_sim  $(REPO)  ./Logs  $(ARCH) -p 8 $(ISA_TEST_EXTRA_ARGS)
 	@echo "Finished running regressions; saved logs in Logs/"
 
 # ================================================================
