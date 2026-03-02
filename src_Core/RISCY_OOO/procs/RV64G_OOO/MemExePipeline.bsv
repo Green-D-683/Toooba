@@ -67,6 +67,9 @@ typedef struct {
     PhyRegs regs;
     InstTag tag;
     LdStQTag ldstq_tag;
+`ifdef MEM_INST_TRACE
+    ByteEn  byteEn; 
+`endif
 } MemDispatchToRegRead deriving(Bits, Eq, FShow);
 
 typedef struct {
@@ -78,6 +81,9 @@ typedef struct {
     // src reg vals
     Data rVal1;
     Data rVal2;
+`ifdef MEM_INST_TRACE
+    ByteEn  byteEn; 
+`endif
 } MemRegReadToExe deriving(Bits, Eq, FShow);
 
 typedef struct {
@@ -432,31 +438,46 @@ module mkMemExePipeline#(MemExeInput inIfc)(MemExePipeline);
 `endif
 
 `ifdef MEM_INST_TRACE
-    if (True) begin
-        rule monitorPipe;
-            if (
-                True 
+    RWire#(ByteEn) showPipe <- mkRWire;
+
+
+    rule monitorPipe;
+        if ( True 
 `ifdef IN_ORDER
-                &&& pipe.first.data matches tagged MemExe .x
-                &&& x.data.mem_inst.mem_func == `MEM_INST_TRACE
+            &&& pipe.first.data matches tagged MemExe .x
+            &&& x.data.mem_inst.mem_func == `MEM_INST_TRACE
 `else // SUPERSCALAR
-                &&& rsMem.dispatchData.data.mem_func == `MEM_INST_TRACE
-                &&& rsMem.dispatchData matches .x
+            &&& rsMem.dispatchData.data.mem_func == `MEM_INST_TRACE
+            &&& rsMem.dispatchData matches .x
 `endif
-            ) $display("[pipe - first] ", fshow(x));
-        endrule
-    end
+        ) begin
+`ifdef SUPERSCALAR
+        let byteEn = lsq.getOrigBE(x.data.ldstq_tag); 
+`else
+        let byteEn = x.data.mem_inst.byteEn;
+`endif
+        showPipe.wset(byteEn);
+        if (
+            True 
+            &&& any(\== (False), byteEn)
+
+        ) $display("[pipe - first] ", fshow(x));
+        end
+    endrule
 `endif
 
 `ifdef SUPERSCALAR
-    rule doDispatchMem;
+        rule doDispatchMem;
+    
         rsMem.doDispatch;
         let x = rsMem.dispatchData;
         let ldstqtag = x.data.ldstq_tag;
         let mem_func = x.data.mem_func;
         let spec_bits = x.spec_bits;
 `else // IN_ORDER
-    rule doDispatchMem (pipe.first.data matches tagged MemExe .x);
+    rule doDispatchMem (
+            pipe.first.data matches tagged MemExe .x
+        );
         /*
             Look at front of In-Order Pipeline, and dequeue if item is tagged as Mem instruction. The In-Order Core also allocates the LSQ at this stage.
         */
@@ -478,6 +499,9 @@ module mkMemExePipeline#(MemExeInput inIfc)(MemExePipeline);
         // executed after address transation
         doAssert(!(mem_func == St && isValid(x.regs.dst)),
                  "St cannot have dst reg");
+`ifdef MEM_INST_TRACE
+        let byteEn = validValue(showPipe.wget);
+`endif
 
         // go to next stage
         dispToRegQ.enq(ToSpecFifo {
@@ -487,6 +511,9 @@ module mkMemExePipeline#(MemExeInput inIfc)(MemExePipeline);
                 regs: x.regs,
                 tag: x.tag,
                 ldstq_tag: ldstqtag
+`ifdef MEM_INST_TRACE
+                ,byteEn: byteEn
+`endif
             },
             spec_bits: spec_bits
         });
@@ -509,7 +536,8 @@ module mkMemExePipeline#(MemExeInput inIfc)(MemExePipeline);
         rule monitorDispToRegQ;
             if (
                 True 
-                && dispToRegQ.first.data.mem_func == `MEM_INST_TRACE
+                &&& dispToRegQ.first.data.mem_func == `MEM_INST_TRACE
+                &&& any(\== (False), dispToRegQ.first.data.byteEn )
             ) $display("[dispToRegQ - first] ", fshow(dispToRegQ.first));
         endrule
     end
@@ -551,20 +579,29 @@ module mkMemExePipeline#(MemExeInput inIfc)(MemExePipeline);
                 ldstq_tag: x.ldstq_tag,
                 rVal1: rVal1,
                 rVal2: rVal2
+`ifdef MEM_INST_TRACE
+                , byteEn: x.byteEn
+`endif
             },
             spec_bits: dispToReg.spec_bits
         });
     endrule
 
 `ifdef MEM_INST_TRACE
-    if (True) begin
-        rule monitorRegToExeQ;
-            if (
-                True 
-                && regToExeQ.first.data.mem_func == `MEM_INST_TRACE
-            ) $display("[regToExeQ - first] ", fshow(regToExeQ.first));
-        endrule
-    end
+    RWire#(Bool) showshiftBE <- mkRWire;
+
+
+    rule monitorRegToExeQ;
+        if (
+            True 
+            &&& regToExeQ.first.data.mem_func == `MEM_INST_TRACE
+            &&& any(\== (False), regToExeQ.first.data.byteEn)
+        ) begin
+            $display("[regToExeQ - first] ", fshow(regToExeQ.first));
+            showshiftBE.wset(True);
+        end
+    endrule
+
 `endif
 
     rule doExeMem;
@@ -573,20 +610,26 @@ module mkMemExePipeline#(MemExeInput inIfc)(MemExePipeline);
         let x = regToExe.data;
         if(verbose) $display("[doExeMem] ", fshow(regToExe));
 
-        // TODO LSQ Enq
-
         // get virtual addr & St/Sc/Amo data
         Addr vaddr = x.rVal1 + signExtend(x.imm);
         Data data = x.rVal2;
 
         // get shifted data and BE
         // we can use virtual addr to shift, since page size > dword size
+`ifndef MEM_INST_TRACE
         ByteEn origBE = lsq.getOrigBE(x.ldstq_tag);
+`else // Avoid needing extra read port for lsq.getOrigBE
+        ByteEn origBE = x.byteEn;
+`endif
         function Tuple2#(ByteEn, Data) getShiftedBEData(Addr addr, ByteEn be, Data d);
             Bit#(TLog#(NumBytes)) byteOffset = truncate(addr);
             return tuple2(unpack(pack(be) << byteOffset), d << {byteOffset, 3'b0});
         endfunction
         let {shiftBE, shiftData} = getShiftedBEData(vaddr, origBE, data);
+
+`ifdef MEM_INST_TRACE
+        if (showshiftBE.wget matches tagged Valid .b) $display("[shiftBE: shiftData] ", fshow(shiftBE), fshow(shiftData));
+`endif
 
         // update LSQ data now
         if(x.ldstq_tag matches tagged St .stTag) begin
@@ -739,8 +782,8 @@ module mkMemExePipeline#(MemExeInput inIfc)(MemExePipeline);
             if(forward.dst matches tagged Valid .dst) begin
 `ifdef SUPERSCALAR
                 inIfc.setRegReadyAggr_forward(dst.indx);
-`else // IN_ORDER
-                inIfc.sendBypass[exeSendBypassPort].send(dst.indx, forward.data);
+// `else // IN_ORDER
+//                 inIfc.sendBypass[exeSendBypassPort].send(dst.indx, forward.data); // ! This is the problem - forward.data is not shifted back into place - cannot send bypass here
 `endif
             end
 
