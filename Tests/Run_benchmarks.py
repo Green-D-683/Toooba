@@ -7,11 +7,11 @@ from os import PathLike
 import multiprocessing
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
 
-parser = ArgumentParser(\
-    prog = "Run_benchmarks.py", \
-    description = "Runs a RISC-V simulation executable on Benchmark tests - ELF files taken from <repo>/Tests/benchmarks and its sub-directories.", \
-    epilog = """For Example: `$ <this_prog>  .exe_HW_sim  ~somebody/GitHub/Toooba ./Logs -v -p 4` will run the verilator simulation executable on the following RISC-V ISA tests: `~somebody/GitHub/Toooba/Tests/benchmarks/*.bin` and will leave a transcript of each test's simulation output in files like `./Logs/rv32ui-p-add.log`. Each log will contain an instruction trace (because of the '-v' arg). It will use 4 processes in parallel to run the regressions.(creating temporary working directories worker_0, ..., worker_3). \n\nFor more details, see $(REPO)/Tests/Run_benchmarks.py""", \
-    add_help = True, \
+parser = ArgumentParser(
+    prog = "Run_benchmarks.py", 
+    description = "Runs a RISC-V simulation executable on Benchmark tests - ELF files taken from <repo>/Tests/benchmarks and its sub-directories.", 
+    epilog = """For Example: `$ <this_prog>  .exe_HW_sim  ~somebody/GitHub/Toooba ./Logs -v -p 4` will run the verilator simulation executable on the following RISC-V ISA tests: `~somebody/GitHub/Toooba/Tests/benchmarks/*.bin` and will leave a transcript of each test's simulation output in files like `./Logs/rv32ui-p-add.log`. Each log will contain an instruction trace (because of the '-v' arg). It will use 4 processes in parallel to run the regressions.(creating temporary working directories worker_0, ..., worker_3). \n\nFor more details, see $(REPO)/Tests/Run_benchmarks.py""", 
+    add_help = True, 
     formatter_class=RawDescriptionHelpFormatter
 )
 
@@ -23,7 +23,7 @@ parser.add_argument("--verbose", "-v", action="count", default=0, help="Print ad
 parser.add_argument("--parallelism", "-p", type=int, default=multiprocessing.cpu_count ()-4 ,help="Specifies the number of parallel processes used (creates temporary separate working directories worker_0, worker_1, ...). By default uses the number of CPUs listed in `/proc/cpuinfo - 4`.")
 parser.add_argument("--timeout_secs", type=int, default=6000, help="Specifies the number of seconds to wait for each command run. Defaults to 6000s")
 # Log files currently take up ~25GB per run, use this flag to minimise logfile storage
-parser.add_argument("--no_write_logs", action="store_false", help="Don't write success logfiles to reduce storage overhead of run - requires Python >= 3.6")
+parser.add_argument("--no_write_logs", "--no_store_logs", action="store_false", help="Write logfiles to tempdir and delete when finished to reduce storage overhead of run - if this argument is specified, only failed tests will be written to 'logs_path'")
 
 args = parser.parse_args()
 
@@ -32,6 +32,9 @@ import os
 import stat
 import subprocess
 import re
+
+from tempfile import mkdtemp
+from shutil import rmtree
 
 # ================================================================
 # DEBUGGING ONLY: This exclude list allows skipping some specific test
@@ -219,7 +222,10 @@ def traverse (fn_filter_dir, fn_filter_regular_file, level, path):
 # For each ELF file, execute it in the RISC-V simulator
 
 def do_worker (worker_num, args_dict):
-    tmpdir = "./worker_" + "{0}".format (worker_num)
+    if not args_dict['write_logs']:
+        tmpdir = mkdtemp()
+    else:
+        tmpdir = "./worker_" + "{0}".format (worker_num)
     if not os.path.exists (tmpdir):
         os.mkdir (tmpdir)
     elif not os.path.isdir (tmpdir):
@@ -238,7 +244,9 @@ def do_worker (worker_num, args_dict):
     num_executed = 0
     num_passed   = 0
 
-    while True:
+    done = False
+
+    while not done:
         # Get a unique index into the filenames, and get the filename
         with index.get_lock():
             my_index    = index.value
@@ -248,32 +256,38 @@ def do_worker (worker_num, args_dict):
             with results.get_lock():
                 results [2 * worker_num]     = num_executed
                 results [2 * worker_num + 1] = num_passed
-            return
-        filename = filenames [my_index]
+            done = True
+        if not done:
+            filename = filenames [my_index]
 
-        (message, passed, csvline) = do_benchmark (args_dict, filename)
-        num_executed = num_executed + 1
+            (message, passed, csvline) = do_benchmark (args_dict, filename)
+            num_executed = num_executed + 1
 
-        if passed:
-            num_passed = num_passed + 1
-            pass_fail = "PASS"
-        else:
-            pass_fail = "FAIL"
+            if passed:
+                num_passed = num_passed + 1
+                pass_fail = "PASS"
+            else:
+                pass_fail = "FAIL"
 
-        message = message + ("Worker {0}: Test: {1} {2} [So far: total {3}, executed {4}, PASS {5}, FAIL {6}]\n"
-                             .format (worker_num,
-                                      os.path.basename (filename),
-                                      pass_fail,
-                                      n_tests,
-                                      num_executed,
-                                      num_passed,
-                                      num_executed - num_passed))
-        sys.stdout.write (message)
-        csvQ.put(csvline)
-        # Create a TAP file to output individual test result in TAP format
-        tap_out = open("../benchmark_report.tap", "a+")
-        tap_out.write(("ok" if passed else "not ok") + " " + str(my_index + 1) + " - " + filenames[my_index] + "\n")
-        tap_out.close()
+            message = message + ("Worker {0}: Test: {1} {2} [So far: total {3}, executed {4}, PASS {5}, FAIL {6}]\n"
+                                .format (worker_num,
+                                        os.path.basename (filename),
+                                        pass_fail,
+                                        n_tests,
+                                        num_executed,
+                                        num_passed,
+                                        num_executed - num_passed))
+            sys.stdout.write (message)
+            csvQ.put(csvline)
+            # Create a TAP file to output individual test result in TAP format
+            tap_out = open("../benchmark_report.tap", "a+")
+            tap_out.write(("ok" if passed else "not ok") + " " + str(my_index + 1) + " - " + filenames[my_index] + "\n")
+            tap_out.close()
+    
+    os.chdir(os.path.abspath("../")) # This might not be needed?
+    rmtree(tmpdir)
+
+    return 
 
 # ================================================================
 # For each ELF file, execute it in the RISC-V simulator
@@ -303,24 +317,33 @@ def do_benchmark (args_dict, full_filename):
     # Save stdouts in log file
     log_filename = os.path.join (args_dict ['logs_path'], basename + ".log")
     message = message + ("    Writing log: {0}\n".format (log_filename))
+    if not args_dict['write_logs']:
+        backup_log_filename = log_filename
+        log_filename = (f"./{basename}.log")
 
     csvline = ""
 
     with open (log_filename, 'w') as fd:
-        completed_process1 = run_command (command1, fd, args_dict["write_logs"])
+        completed_process1 = run_command (command1, fd)
         
         if completed_process1 is not None and completed_process1.returncode == 0:
-            completed_process2 = run_command (command2, fd, args_dict["write_logs"])
-            passed = completed_process2 is not None and \
-                completed_process2.returncode == 0 and \
-                not completed_process2.stdout.endswith ("FAIL 1")
+            completed_process2 = run_command (command2, fd)
+            passed = completed_process2 is not None and completed_process2.returncode == 0
+                
         else:
             passed = False
 
-        if passed:
-            out = list(completed_process2.stdout.split("\n")[-1000:].__reversed__()) # Truncate and `tac`
-            instretLine = list(filter((lambda s: "instret" in s), out))[0] # `grep -m 1`
-            csvline = f"{basename}.log, {re.sub(r"^instret:(\d+).*? (\d+)$", r"\2, \1", instretLine)}\n" # `sed ...`
+    with open(log_filename, 'r') as fd:
+        outStr = fd.read()
+        passed = passed and not outStr.endswith ("FAIL 1")
+
+    if passed:
+        out = list(outStr.split("\n")[-1000:].__reversed__()) # `tail` and `tac`
+        instretLine = list(filter((lambda s: "instret" in s), out))[0] # `grep -m 1`
+        csvline = f"{basename}.log, {re.sub(r"^instret:(\d+).*? (\d+)$", r"\2, \1", instretLine)}\n" # `sed ...`
+    elif (not args_dict['write_logs']):
+        # Failed benchmarks should still be copied and stored to logdir
+        os.rename(os.path.abspath(log_filename), backup_log_filename)
 
     # If Tandem Verification trace file was created, save it as well
     if os.path.exists ("./trace_out.dat"):
@@ -334,7 +357,7 @@ def do_benchmark (args_dict, full_filename):
 # This is a wrapper around 'subprocess.run' because of an annoying
 # incompatible change in moving from Python 3.5 to 3.6
 
-def run_command (command, log_fd, write_log=True):
+def run_command (command, log_fd):
     command_str = " ".join(command)
     log_fd.write (f"Running: {command_str}\n")
     try:
@@ -348,22 +371,15 @@ def run_command (command, log_fd, write_log=True):
                                     universal_newlines = True,
                                     timeout=timeout)
         else:
-            if write_log:
-                stdout = log_fd
-                log_fd.write("Stdout:\n")
-                bufsize = -1
-            else:
-                stdout = subprocess.PIPE
-                bufsize = 0
             # Python 3.6 and later
             result = subprocess.run (args = command,
-                                    bufsize = bufsize,
-                                    stdout = stdout,
+                                    bufsize = -1,
+                                    stdout = log_fd,
                                     stderr = subprocess.STDOUT,
                                     encoding='utf-8',
                                     timeout=timeout)
-        if write_log or result.returncode != 0:
-            log_fd.write(f"Finished with exit code {result.returncode}\n")
+        
+        log_fd.write(f"Finished with exit code {result.returncode}\n")
         return result
     except subprocess.TimeoutExpired:
         sys.stderr.write(f"TIMEOUT: {command_str} !\n")
