@@ -67,7 +67,7 @@ def initialSweep() -> None:
     run_params = [param_defaults];
     for param in args.PARAMS:
         paramO = args.PARAM_OBJ[param];
-        if not (("minimum" in paramO.keys() and paramO["default"] == paramO["minimum"]) or (paramO["default"] == 1)):
+        if not ((paramO["default"] == paramO["minimum"]) if ("minimum" in paramO.keys()) else (paramO["default"] == 1)):
             parameterisation = param_defaults.copy();
             parameterisation[param] -= paramO["increment"]; 
             run_params.append(parameterisation);
@@ -84,7 +84,7 @@ def incrementSweep() -> None:
     run_params = [param_values]; # Include iteration base values
     for param in args.PARAMS:
         paramO = args.PARAM_OBJ[param];
-        if not (("minimum" in paramO.keys() and param_values[param] - paramO["increment"] < paramO["minimum"]) or (param_values[param] - paramO["increment"] < 1)):
+        if not ((param_values[param] - paramO["increment"] < paramO["minimum"]) if ("minimum" in paramO.keys()) else (param_values[param] - paramO["increment"] < 1)):
             parameterisation = param_values.copy();
             parameterisation[param] -= paramO["increment"]; 
             run_params.append(parameterisation);
