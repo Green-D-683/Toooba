@@ -43,7 +43,8 @@ TEST ?= rv64ui-p-add
 BSC_COMPILATION_FLAGS += -D BSIM \
 
 # Set in order for easier build testing
-IN_ORDER = 1
+OOO_ISSUEQ = 0
+ISA_TEST_EXTRA_ARGS = --no_store_logs
 
 include $(REPO)/builds/Resources/Include_RISCY_Config.mk
 
