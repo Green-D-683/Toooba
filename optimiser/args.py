@@ -41,6 +41,10 @@ def _get_params_obj()->dict[str,Param]:
     with open(parser.parse_args().param_file, "r") as f:
         return {k: v for k, v in load_json("".join(f.readlines())).items() if not v["const"]};
 
+def _get_params_const()->dict[str,Param]:
+    with open(parser.parse_args().param_file, "r") as f:
+        return {k: v["default"] for k, v in load_json("".join(f.readlines())).items() if v["const"]};
+
 #================================================================================================================#
 # Email Arguments
 #================================================================================================================#
@@ -85,6 +89,7 @@ PARAM_OBJ:dict[str,Param] = _get_params_obj();
 PARAMS:list[str] = PARAM_OBJ.keys();
 PARAM_DEFAULTS:dict[str,int] = {k:v["default"] for k, v in PARAM_OBJ.items()};
 PARAM_VALUES:dict[str,int] = {k:(v["current"] if "current" in v.keys() else v["default"]) for k, v in PARAM_OBJ.items()};
+PARAM_CONSTS:dict[str,int] = _get_params_const();
 
 def _list_options(name:str, d:dict):
     print (f"\n{name}:\n");

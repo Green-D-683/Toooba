@@ -33,7 +33,7 @@ class RunRetObj(TypedDict):
 from debug import dprintf, emailWarn, printf_err;
 
 # Area Tooling Option
-from args import parsed_args, _area_tools as args_listed_area_tools
+from args import parsed_args, _area_tools as args_listed_area_tools, PARAM_CONSTS
 
 #================================================================================================================#
 # Global Definitions - known at start-time
@@ -284,6 +284,8 @@ def _do_run(index:int, itrun:tuple[int, int], params:dict[str,int], ret:Queue, c
         # Write Parameters
         for param in params.keys():
             param_file.write(f"{param} = {params[param]}\n");
+        for const in PARAM_CONSTS.keys():
+            param_file.write(f"{const} = {PARAM_CONSTS[const]}\n");
 
     # `make compile
     _make_call_log(log_dir, "compile");
