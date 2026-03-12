@@ -89,14 +89,14 @@ XILINX_INT_MUL_LATENCY = 2
 
 # Add Boolean Toogle for OOO Issue - default enable OOO Issue
 OOO_ISSUEQ ?= 1
-ifneq (,$(filter $(OOO_ISSUEQ),0)) 
+ifeq (0,$(filter $(OOO_ISSUEQ),0)) 
 BSC_COMPILATION_FLAGS += \
 	-D IN_ORDER
-else ifneq (,$(filter $(OOO_ISSUEQ),1)) 
+else ifeq (1,$(filter $(OOO_ISSUEQ),1)) 
 BSC_COMPILATION_FLAGS += \
 	-D SUPERSCALAR
 else 
-	$(error Unsupported OOO_ISSUEQ boolean $(OOO_ISSUEQ))
+$(error "Unsupported OOO_ISSUEQ boolean $(OOO_ISSUEQ)")
 endif
 
 # If not using manual tuning
